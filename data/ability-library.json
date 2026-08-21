@@ -4555,8 +4555,10 @@
     },
     "Smoke Grenade": {
       "type": "ccEffect",
-      "label": "Choose space within 2; place shield, friendly within 2 gains 2 MP",
+      "label": "Choose space within 3 and mark it; friendly within 2 gains 2 MP and becomes Hidden; marked space blocks LOS until the start of the next round",
       "chooseSpaceWithin2OfActivating": true,
+      "spaceRange": 3,
+      "recipientBecomesHidden": true,
       "mpBonus": 2,
       "wiredStatus": "wired"
     },

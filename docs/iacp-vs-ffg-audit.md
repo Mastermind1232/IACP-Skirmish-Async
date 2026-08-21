@@ -212,6 +212,70 @@ awaiting his call before the rename.
   known to work (Mandalorian Steel, Stimulants, Tough Luck, Son of Skywalker).
   A missing `abilityId` is not evidence of a missing implementation.
 
+| Self-Augmentation | 11.0 Playtest (Season 11) | matches (our `Attachment:` label is our own convention) |
+| Set the Charge | 8.0 Playtest (Season 8) | body matches. **NAME DRIFT:** the card is "Set the **Charge**", singular; we store "Set the Charges". See the naming section. |
+| Smoke Grenade | (blank footer, IACP mark) | **THREE DRIFTS, FIXED 2026-08-21.** See below. |
+| Sniper Configuration | IACP Approved | matches |
+| Static Pulse | IACP Season 5 | matches |
+| Still Faster Than You | IACP Approved | matches |
+| Supercharge | IACP Approved | matches |
+| Support Specialist | 8.0 Playtest (Season 8) | body matches. **OPEN QUESTION:** the card prints the Special Action arrow but our entry carries `timing: "duringActivation"`, so it is offered from hand rather than from the DC's Special Action button. See below. |
+
+### Smoke Grenade held the superseded card (fixed 2026-08-21)
+
+The IACP card reads:
+
+> Special Action: Choose a space within **3** spaces and **mark it**. A friendly
+> figure within 2 spaces of the chosen space gains 2 movement points **and
+> becomes HIDDEN**. **Until the start of the next round**, the marked space
+> blocks line of sight.
+
+Our data and resolver held a different card and were wrong three separate ways,
+all of them live:
+
+| | was | now |
+|---|---|---|
+| range of the marked space | within 2 | within 3 (`spaceRange` in `ability-library.json`) |
+| the recipient | gained 2 MP only | also becomes Hidden (`recipientBecomesHidden`) |
+| how long the smoke blocks LOS | stamped `expiresAfterRound = currentRound + 1`, so it survived the whole following round | stamps `currentRound`, so it lifts when the next round starts |
+
+This is the same failure mode as Disable: our copy is the superseded text rather
+than the IACP reissue. The duration error was the largest, leaving a
+LOS-blocking space up for roughly twice as long as the card allows.
+
+Guarded by `tests/domain/oracle/cc-smoke-grenade-iacp.test.js`, four tests, all
+confirmed non-vacuous by reintroducing each defect. The flag key
+`chooseSpaceWithin2OfActivating` is left as-is because it is an id recorded in
+the ledger and the wiring probes; the range now lives in the data and the
+comment says so.
+
+### Open: two more printed names we do not match
+
+Same shape as Deploy the Garrison, but a different word rather than punctuation,
+so these are the name a player reads on the card:
+
+| printed | stored | where the stored name lives |
+|---|---|---|
+| Eye on the Prize | Eyes on the Prize | ~20 files; one of the two images is filed correctly as `Eye on the Prize.png` |
+| Set the Charge | Set the Charges | ~25 files, image filename included |
+
+Both are internally consistent, so nothing is broken; the rename is mechanical
+and touches data keys, oracle snapshots, the catalog manifest and the ledger.
+Raised with alexanbv 2026-08-21, awaiting a single ruling for the class.
+
+### Open: Support Specialist is not tagged as a Special Action
+
+The card prints the Special Action arrow, but the entry carries
+`timing: "duringActivation"` rather than `"specialAction"`. In this engine that
+distinction is the play path: `SPECIAL_ACTION_TIMING` in `cc-timing.js` routes
+`specialAction` and `doubleActionSpecial` to the DC's Special Action button and
+withholds them from hand. 65 CCs use `specialAction` and 7 use
+`doubleActionSpecial`; Support Specialist is one of only two that print the arrow
+and use a different timing. The value traces back to
+`scripts/seed-cc-unverified-first-pass.js`, whose seeded text had no "Special
+Action:" prefix, so it looks like seed drift rather than a decision. Not changed:
+moving a card's play path is a behavioural change and warrants a ruling.
+
 ### Naming decision: Deploy the Garrison (RESOLVED 2026-08-21)
 
 The printed card title is `Deploy the Garrison!` with a trailing exclamation mark.
@@ -230,10 +294,11 @@ known cosmetic difference and is not drift.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**57 of ~580 checked.** Drifts so far: Ambush (text only, fixed), the Power Token
-faces on Eye on the Prize and Gauntlet Blade (behavioural, fixed) and on Marked
-Territory (text only, fixed), Reverse Engineer's dropped Surge qualifier (text
-only, fixed), and the Eye/Eyes name (open).
+**65 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
+Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
+Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and
+Charge/Charges names (open), and Support Specialist's play path (open).
 
 alexanbv 2026-08-19: "Remember most cards are IACP cards" — so there is no
 meaningful non-IACP subset to skip. Sweep everything.

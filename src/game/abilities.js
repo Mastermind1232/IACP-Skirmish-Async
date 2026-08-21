@@ -4452,7 +4452,11 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: chooseSpaceWithin2OfActivating (Smoke Grenade) — 3 phases:
-  //   Phase 1 (no chosenSpace): return validSpaces (within 2 of activator).
+  //   Phase 1 (no chosenSpace): return validSpaces (within entry.spaceRange of
+  //     the activator). NOTE the flag name is historical: the IACP card reads
+  //     "Choose a space within 3 spaces", so spaceRange is 3, not 2. The key
+  //     itself is an id recorded in the ledger and the wiring probes, so it is
+  //     left alone; the range lives in the data (audit 2026-08-21).
   //   Phase 2 (chosenSpace, no chosenFigureKey): place smoke + friendly-figure picker
   //     (figures within 2 of chosen space).
   //   Phase 3 (chosenSpace + chosenFigureKey): grant MP to chosen friendly.
@@ -4471,7 +4475,8 @@ export function resolveAbility(abilityId, context) {
     if (activatingFigKeys.length === 0) return { applied: false, manualMessage: 'Resolve manually: no figures found.' };
     const activatorIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
     const activatingFigKey = activatingFigKeys[activatorIdx] || activatingFigKeys[0];
-    // Phase 1: pick a space within 2 of any activating-DC figure.
+    const _sgRange = entry.spaceRange || 2;
+    // Phase 1: pick a space within _sgRange of any activating-DC figure.
     if (!chosenSpace) {
       const boardState = getBoardStateForMovement(game, null);
       if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Resolve manually: map data missing.' };
@@ -4481,11 +4486,11 @@ export function resolveAbility(abilityId, context) {
         if (!pos) continue;
         const occ = boardState.occupiedSet;
         const occArr = occ instanceof Set ? [...occ] : (occ || []);
-        const cells = getReachableSpaces(pos, 2, boardState.mapSpaces, occArr);
+        const cells = getReachableSpaces(pos, _sgRange, boardState.mapSpaces, occArr);
         for (const c of cells) validSet.add(String(c).toLowerCase());
       }
       const validSpaces = [...validSet];
-      if (validSpaces.length === 0) return { applied: false, manualMessage: 'No spaces within 2 to choose.' };
+      if (validSpaces.length === 0) return { applied: false, manualMessage: `No spaces within ${_sgRange} to choose.` };
       return { requiresSpaceChoice: true, validSpaces };
     }
     // Phase 3: figure picked → apply MP grant to that friendly.
@@ -4495,13 +4500,17 @@ export function resolveAbility(abilityId, context) {
         return { applied: false, manualMessage: `**Smoke Grenade** — recipient ${chosenFigureKey} no longer on the board.` };
       }
       const n = entry.mpBonus || 0;
+      // The card grants the recipient Hidden alongside the MP (audit 2026-08-21;
+      // the stored text used to omit it entirely).
+      if (entry.recipientBecomesHidden) applyCondition(game, chosenFigureKey, 'Hide');
+      const _sgHidNote = entry.recipientBecomesHidden ? ' and becomes **Hidden**' : '';
       // Smoke Grenade on the activating figure: gains MP during their own
       // activation — banks normally per alexanbv 2026-07-27.
       if (chosenFigureKey === activatingFigKey) {
         addMovementPoints(game, msgId, n);
         return {
           applied: true,
-          logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** gains **${n} MP** (banked for this activation).`,
+          logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** gains **${n} MP** (banked for this activation)${_sgHidNote}.`,
           refreshMovementBank: true,
           refreshDcEmbed: true,
           activeMsgId: msgId,
@@ -4538,20 +4547,24 @@ export function resolveAbility(abilityId, context) {
         pendingMoveXMsgId: recipMsgId,
         refreshDcEmbedMsgIds: [recipMsgId],
         activeMsgId: recipMsgId,
-        logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** gains **${n} MP** — spend at once on movement or MP-cost abilities; remainder lost.`,
+        logMessage: `**Smoke Grenade** — **${dcNameFromFigureKey(chosenFigureKey)}** gains **${n} MP**${_sgHidNote} — spend at once on movement or MP-cost abilities; remainder lost.`,
       };
     }
     // Phase 2: place smoke token, then present friendly-figure picker.
     const spaceUpper = String(chosenSpace).toUpperCase();
     game.ancillaryTokens = game.ancillaryTokens || {};
     game.ancillaryTokens.smoke = [...(game.ancillaryTokens.smoke || []), chosenSpace];
-    // CSV row 721: "discard the smoke token at the end of the NEXT round". A
-    // token placed in round N persists through round N+1 and is discarded at the
-    // end of round N+1 — record expiresAfterRound = currentRound + 1. The
-    // start-of-round sweep (cleanupRoundStart) clears tokens once that round has
-    // fully elapsed. smoke[] stays a plain coord array for the LOS consumer.
+    // The card reads "UNTIL THE START OF THE NEXT ROUND, the marked space blocks
+    // line of sight". A token placed in round N therefore blocks for the rest of
+    // round N and is gone the moment round N+1 starts, so its last live round is
+    // N — record expiresAfterRound = currentRound. The start-of-round sweep
+    // (cleanupRoundStart) runs after currentRound is incremented and clears any
+    // token whose expiry round has elapsed. Until 2026-08-21 this recorded
+    // currentRound + 1, which is the "end of the next round" wording and left
+    // the smoke up for a whole extra round. smoke[] stays a plain coord array
+    // for the LOS consumer.
     game.ancillaryTokens.smokeExpiry = game.ancillaryTokens.smokeExpiry || {};
-    game.ancillaryTokens.smokeExpiry[chosenSpace] = (game.currentRound || 1) + 1;
+    game.ancillaryTokens.smokeExpiry[chosenSpace] = (game.currentRound || 1);
     // Compute friendlies within 2 spaces (graph distance) of the smoke
     // space. Use countGameSpaces for distance — same helper Looking
     // for a Fight, etc. use.
@@ -4580,7 +4593,7 @@ export function resolveAbility(abilityId, context) {
       requiresChoice: true,
       choiceOptions: friendlyLabels.map(n => `MP recipient: ${n}`),
       choiceValues: friendlyKeys,
-      logMessage: `**Smoke Grenade** — placed smoke at **${spaceUpper}**. Choose a friendly figure within 2 spaces to gain ${entry.mpBonus || 0} MP.`,
+      logMessage: `**Smoke Grenade** — placed smoke at **${spaceUpper}**. Choose a friendly figure within 2 spaces to gain ${entry.mpBonus || 0} MP${entry.recipientBecomesHidden ? ' and become Hidden' : ''}.`,
       refreshBoard: true,
     };
   }

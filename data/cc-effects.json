@@ -1126,7 +1126,7 @@
       "cost": 1,
       "playableBy": "TROOPER or TECHNICIAN",
       "timing": "specialAction",
-      "effect": "Special Action: Choose a space within 2 spaces. Place 1 smoke token in that space, then a friendly figure within 2 spaces of the chosen space gains 2 movement points. Discard that smoke token at the end of the next round.",
+      "effect": "Special Action: Choose a space within 3 spaces and mark it. A friendly figure within 2 spaces of the chosen space gains 2 movement points and becomes Hidden. Until the start of the next round, the marked space blocks line of sight.",
       "abilityId": "Smoke Grenade"
     },
     "Take Cover": {

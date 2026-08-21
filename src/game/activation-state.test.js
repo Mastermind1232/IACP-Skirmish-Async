@@ -147,8 +147,10 @@ describe('cleanupRoundStart', () => {
   });
 
   it('Smoke Grenade: keeps unexpired smoke, clears smoke whose round has elapsed', () => {
-    // Smoke placed in round 2 → expiresAfterRound 3. At start of round 3 it must
-    // still be present (active through "the next round"); at start of round 4 gone.
+    // Generic sweep check with hand-set expiry values: a token stamped
+    // expiresAfterRound 3 survives the start of round 3 and is gone at the start
+    // of round 4. What Smoke Grenade actually stamps is covered by
+    // tests/domain/oracle/cc-smoke-grenade-iacp.test.js.
     const baseGame = () => ({
       ancillaryTokens: {
         smoke: ['c4', 'd5'],

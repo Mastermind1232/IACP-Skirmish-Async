@@ -493,7 +493,7 @@
     "Sit Tight": "Use at the start of a round. You do not activate any groups this round until you have more ready Deployment cards than your opponent.",
     "Size Advantage": "Special Action: Perform an attack targeting a SMALL figure. Apply +2 Hit to the attack results and the attack gains Weaken.",
     "Slippery Target": "Use when a hostile figure enters an adjacent space. Gain movement points equal to your Speed.",
-    "Smoke Grenade": "Special Action: Choose a space within 2 spaces. Place 1 smoke token in that space, then a friendly figure within 2 spaces of the chosen space gains 2 movement points. Discard that smoke token at the end of the next round.",
+    "Smoke Grenade": "Special Action: Choose a space within 3 spaces and mark it. A friendly figure within 2 spaces of the chosen space gains 2 movement points and becomes Hidden. Until the start of the next round, the marked space blocks line of sight.",
     "Smuggled Supplies": "Use at the start of your activation to recover 2 Damage, apply +1 Surge to your attack results until the end of the round, or apply +1 Evade to your defense results until the end of the round.",
     "Smuggler's Tricks": "Special Action: Choose a tile or token you are on or adjacent to. Until the start of the next round, your opponent counts as having 1 fewer figure on or adjacent to that tile or token.",
     "Sniper Configuration": "Special Action: Perform an attack. You may draw line of sight from any friendly figure, but still measure range from this figure. Apply +2 Accuracy and Pierce 2 to the attack results.",

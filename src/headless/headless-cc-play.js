@@ -615,7 +615,9 @@ export function canResolveCcHeadless(game, playerNum, cardName, deps) {
     if (!hasAdj) return false;
   }
 
-  // Smoke Grenade (chooseSpaceWithin2OfActivating): needs at least one valid space within 2
+  // Smoke Grenade (chooseSpaceWithin2OfActivating): needs at least one space to
+  // mark. The real range is 3 (entry.spaceRange), but this is only a liveness
+  // check, and a 2-ring is a strict subset of a 3-ring, so it stays conservative.
   if (entry.chooseSpaceWithin2OfActivating) {
     if (!activeMsgId) return false;
     const meta = deps.dcMessageMeta?.get(activeMsgId);
@@ -624,7 +626,7 @@ export function canResolveCcHeadless(game, playerNum, cardName, deps) {
     const actFk = Object.keys(poses).find(fk => figKeyToDcName(fk) === meta.dcName);
     const actPos = actFk ? poses[actFk] : null;
     if (!actPos) return false;
-    // Verify at least one map space within range 2 exists (handles edge-case map geometry)
+    // Verify at least one nearby map space exists (handles edge-case map geometry)
     if (deps.getBoardStateForMovement) {
       const bs = deps.getBoardStateForMovement(game, null);
       const adj = bs?.mapSpaces?.adjacency;
