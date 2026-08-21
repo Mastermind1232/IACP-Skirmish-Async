@@ -3551,13 +3551,14 @@ export function resolveAbility(abilityId, context) {
           queueAbilityCondition(game, targetFigureKey, surgeCondition);
           resultParts.push(`became **${surgeCondition}**`);
         }
-        // Gauntlet Blade: on Surge, grant self a Power Token (player chooses type)
+        // Gauntlet Blade: on Surge, gain a BLOCK token. The card prints the Block
+        // face, not the generic choose-a-face badge, so there is no type choice
+        // (12.0 Playtest image; audit 2026-08-21).
         if (entry.rollOneDieSurgeSelfPowerToken && surges >= 1) {
           const _selfFk = _rollOneDieSelfFigureKey;
           if (_selfFk) {
-            const selfName = dcNameFromFigureKey(_selfFk);
-            game.pendingPowerTokenGrant = { grants: [{ figureKey: _selfFk, figName: selfName, count: 1 }], channelId: null, playerNum };
-            resultParts.push(`you gain 1 Power Token — choose type`);
+            grantPowerTokens(game, _selfFk, 'Block', 1);
+            resultParts.push(`you gain 1 Block Token`);
           }
         }
         const targetName = _targetIsNpc
@@ -3625,9 +3626,6 @@ export function resolveAbility(abilityId, context) {
           rollImageDice: [rolled],
           ...(_adjHadDefeats ? { refreshBoard: true } : {}),
         };
-        if (entry.rollOneDieSurgeSelfPowerToken && surges >= 1 && game.pendingPowerTokenGrant) {
-          _rodResult.requiresPowerTokenChoice = true;
-        }
         return _rodResult;
       }
       // Phase 1: enumerate adjacent hostile figures
@@ -5071,6 +5069,9 @@ export function resolveAbility(abilityId, context) {
         const msgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
         if (msgId) healHp(dcHealthState, game, msgId, parseFigureKey(fk).figureIndex, 1, playerNum);
       } else if (action === 'powertoken') {
+        // The card prints the Block face, not the generic choose-a-face badge,
+        // so the token type is fixed (12.0 Playtest image; audit 2026-08-21).
+        grantPowerTokens(game, fk, 'Block', 1);
         st.ptGrants.push({ figureKey: fk, figName: dcNameFromFigureKey(fk) || fk, count: 1 });
       } else if (action === 'condition') {
         const existing = game.figureConditions?.[fk] || [];
@@ -5082,12 +5083,11 @@ export function resolveAbility(abilityId, context) {
     if (st.idx < st.figures.length) {
       return _eyesPromptForFigure(st.figures[st.idx]);
     }
-    // Done — resolve accumulated Power Token grants (choose type) together, if any.
+    // Done — the Block tokens were already granted per figure above; report them.
     const grants = st.ptGrants;
     delete game.pendingEyesOnThePrize;
     if (grants.length > 0) {
-      game.pendingPowerTokenGrant = { grants, channelId: null, playerNum };
-      return { applied: true, requiresPowerTokenChoice: true, refreshDcEmbed: true, logMessage: `**Eyes on the Prize** — resolved; ${grants.length} figure${grants.length === 1 ? '' : 's'} gain a Power Token (choose type).` };
+      return { applied: true, refreshDcEmbed: true, logMessage: `**Eye on the Prize** — resolved; ${grants.length} figure${grants.length === 1 ? '' : 's'} gained a Block Token.` };
     }
     return { applied: true, refreshDcEmbed: true, logMessage: '**Eyes on the Prize** — resolved.' };
   }
@@ -16703,7 +16703,7 @@ function _eyesPromptForFigure(figureKey) {
     requiresChoice: true,
     choiceOptions: [
       `Recover 1 Damage — ${name}`,
-      `Gain 1 Power Token — ${name}`,
+      `Gain 1 Block Token — ${name}`,
       `Discard 1 HARMFUL — ${name}`,
       `Skip — ${name}`,
     ],

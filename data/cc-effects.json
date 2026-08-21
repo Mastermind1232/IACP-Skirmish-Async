@@ -652,7 +652,7 @@
       "cost": 1,
       "playableBy": "SCUM",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round if your affiliation is Scum. Each friendly figure that is carrying or controlling a crate or mission token may either recover 1 Damage, or gain 1 Power Token, or discard 1 HARMFUL condition.",
+      "effect": "Use at the start of a round if your affiliation is Scum. Each friendly figure that is carrying or controlling a crate or mission token may either recover 1 Damage, or gain 1 Block Token, or discard 1 HARMFUL condition.",
       "abilityId": "Eyes on the Prize"
     },
     "Face Me!": {
@@ -847,7 +847,7 @@
       "cost": 1,
       "playableBy": "Bo-Katan Kryze",
       "timing": "afterAttackTargetingYouResolved",
-      "effect": "Use after an attack targeting you resolves. Choose an adjacent hostile figure and roll 1 green die. That figure suffers Damage equal to the Hit results. Then, if you rolled a Surge, gain a Power Token.",
+      "effect": "Use after an attack targeting you resolves. Choose an adjacent hostile figure and roll 1 green die. That figure suffers Damage equal to the Hit results. Then, if you rolled a Surge, gain a Block Token.",
       "abilityId": "Gauntlet Blade"
     },
     "Get Behind Me!": {
@@ -1256,7 +1256,7 @@
       "cost": 0,
       "playableBy": "CREATURE",
       "timing": "duringActivation",
-      "effect": "Use during your activation to gain 1 Power Token. Then, a figure in your group in an exterior space gains 1 Power Token.",
+      "effect": "Use during your activation to gain 1 Power Token. Then, a figure in your group in an exterior space gains 1 Hit Token.",
       "abilityId": "Marked Territory"
     },
     "Master Operative": {

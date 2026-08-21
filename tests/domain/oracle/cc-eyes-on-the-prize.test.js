@@ -1,15 +1,17 @@
 /**
- * Eyes on the Prize (Scum CC) — at the start of a round, each friendly figure
+ * Eye on the Prize (Scum CC) — at the start of a round, each friendly figure
  * carrying or controlling a crate or mission token may recover 1 Damage, gain 1
- * Power Token, or discard 1 HARMFUL condition.
+ * Block Token, or discard 1 HARMFUL condition.
  *
- * Per-figure interactive via the requiresChoice loop; Power Token grants are
- * accumulated and resolved together at the end (choose type). The enumeration
- * (carrying = figureContraband; controlling = on/adjacent to a controlled crate
- * or mission token) lives in board-helpers. alexanbv 2026-06-17.
+ * Per-figure interactive via the requiresChoice loop. The token is a BLOCK
+ * token, not a generic Power Token: the card prints the Block face rather than
+ * the choose-a-face badge, so the player gets no type choice (12.0 Playtest
+ * image; audit 2026-08-21). The enumeration (carrying = figureContraband;
+ * controlling = on/adjacent to a controlled crate or mission token) lives in
+ * board-helpers. alexanbv 2026-06-17.
  *
  * These tests exercise the carrying path (no map-control dependency) and the
- * per-figure loop, plus Power-Token accumulation.
+ * per-figure loop, plus the Block-token grant.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
@@ -57,13 +59,23 @@ describe('Eyes on the Prize — per-figure loop', () => {
     assert.ok(!game.pendingEyesOnThePrize, 'cursor cleared');
   });
 
-  it('accumulates a Power Token grant and resolves it at the end (choose type)', () => {
+  it('grants a Block token outright, with no type choice', () => {
     const game = fixture();
     resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
     const done = resolveAbility('Eyes on the Prize', { game, playerNum: 1, chosenFigureKey: 'powertoken' });
-    assert.equal(done.requiresPowerTokenChoice, true);
-    assert.equal(game.pendingPowerTokenGrant.grants.length, 1);
-    assert.equal(game.pendingPowerTokenGrant.grants[0].figureKey, 'Jawa-1-0');
+    assert.equal(done.applied, true);
+    assert.equal(done.requiresPowerTokenChoice, undefined, 'the card prints Block, so no face is chosen');
+    assert.equal(game.pendingPowerTokenGrant, undefined, 'no pending type picker');
+    assert.deepEqual(game.figurePowerTokens['Jawa-1-0'], ['Block']);
+  });
+
+  it('offers the Block token by name in the per-figure prompt', () => {
+    const game = fixture();
+    const r = resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
+    assert.ok(r.choiceOptions.some((o) => /Gain 1 Block Token/.test(o)),
+      `expected a Block Token option, got ${JSON.stringify(r.choiceOptions)}`);
+    assert.ok(!r.choiceOptions.some((o) => /Power Token/.test(o)),
+      'the generic Power Token wording must not survive');
   });
 
   it('skip applies nothing', () => {

@@ -114,6 +114,79 @@ timing against `data/cc-effects.json` / `data/dc-effects.json`.
 | Desperate Escape | IACP Approved | matches, both the end-of-round move and the Kuiil-defeated passive |
 | Disarm | IACP Approved | matches |
 
+| Definition: 'Love' | IACP Season 5 | matches |
+| Disengage | 11.0 Playtest (Season 11) | matches |
+| Double or Nothing | 8.0 Playtest (Season 8) | matches |
+| Elusive | IACP Approved | matches |
+| Eye on the Prize | 12.0 Playtest (Season 12) | **NAME DRIFT + TOKEN DRIFT.** See below. Body text otherwise matches. |
+| Face Me! | IACP Season 5 | matches, including the Special Action icon |
+| Feint | IACP Season 5 | matches |
+| Field Promotion | IACP Approved | matches, cost 0 |
+| Final Stand | IACP Approved | matches; prints the generic "?" Power Token badge, so "Power Token" is right |
+| Findsman Meditation | IACP Approved | matches |
+| Forbidden Knowledge | IACP Approved | matches |
+| Force Drain | IACP Approved | matches, including the Special Action icon |
+| Gauntlet Blade | 12.0 Playtest (Season 12) | **TOKEN DRIFT, FIXED.** See below. Everything else matches. |
+| Guerilla Warfare | IACP Approved | matches, including the one-r spelling of "Guerilla" and the Block Token |
+| Guild Programming | Rebalanced | matches |
+| Honoring the Fallen | IACP Approved | matches |
+| Mandalorian Steel | IACP Season 10 | Block-token clause verified while calibrating the symbol reading; already in `cc-verified.json` |
+| Apex Predator, Battle Scars, Price of Glory | various | generic "?" Power Token badge confirmed; "Power Token" is correct on all three |
+| Marked Territory | (footer not read) | **TOKEN DRIFT, text only.** See below. |
+
+### Power Token faces: the card tells you which one (audit 2026-08-21)
+
+The engine models a Power Token as generic and prompts the player to pick its
+face. That is correct only when the card prints the generic badge. The module
+ships the four faces as separate art in `vassal_extracted/images/tokens/`
+(`Power Token--Block/Evade/Hit/Surge`), and card text uses them directly:
+
+| printed glyph | meaning |
+|---|---|
+| black badge, white trefoil | Block Token |
+| black badge, white burst | Hit Token |
+| black badge, white question mark | generic Power Token, player chooses the face |
+
+Calibrated against Mandalorian Steel, which is one of the three cards already
+recorded in `data/cc-verified.json` and prints "if that figure spent a [trefoil]".
+
+Three cards were storing the generic wording for a specific printed face:
+
+| card | prints | was | now |
+|---|---|---|---|
+| Eye on the Prize | Block | "gain 1 Power Token", resolver stashed `pendingPowerTokenGrant` and opened the face picker (`abilities.js:5090`) | grants Block outright, no picker |
+| Gauntlet Blade | Block | same, on the Surge branch (`abilities.js:3554`) | grants Block outright, no picker |
+| Marked Territory | Hit (second clause) | "gains 1 Power Token" | "gains 1 Hit Token", stored text only |
+
+The first two were live defects: the player could take Evade or Hit where the
+card says Block. Marked Territory is stored text only, because the whole card
+routes to `markedTerritoryUnimplemented` (a deliberate no-op, alexanbv
+2026-06-21) and the `conditionalExteriorPowerToken` code path it would have used
+is dead.
+
+Guarded by `tests/domain/oracle/cc-gauntlet-blade-block-token.test.js` (drives
+every green-die face deterministically by stubbing `Math.random`) and by the
+updated `tests/domain/oracle/cc-eyes-on-the-prize.test.js`. Both were confirmed
+non-vacuous by reintroducing the defect.
+
+Correct as printed, no change: Apex Predator, Battle Scars, Final Stand, Price
+of Glory (all print the "?" badge) and Guerilla Warfare (prints Block and
+already granted Block).
+
+### Open: Eye on the Prize is stored under the wrong name
+
+The card prints **"Eye on the Prize"**, singular. The codebase stores
+**"Eyes on the Prize"** in every place: the `cc-effects.json` key and
+`abilityId`, `ability-library.json`, the python parity snapshot,
+`catalog-manifest.json`, `dc-cc-ledger.json`, `board-helpers.js`,
+`abilities.js`, and several oracle and headless fixtures. Both images in the
+module are the same 12.0 Playtest card, and one of them is filed correctly as
+`Eye on the Prize.png`.
+
+Unlike Deploy the Garrison this is a different word rather than punctuation, and
+it is the name a player reads on the card. Raised with alexanbv 2026-08-21;
+awaiting his call before the rename.
+
 ### Naming decision: Deploy the Garrison (RESOLVED 2026-08-21)
 
 The printed card title is `Deploy the Garrison!` with a trailing exclamation mark.
@@ -132,7 +205,9 @@ known cosmetic difference and is not drift.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**26 of ~580 checked.** One text-level drift (Ambush), no behavioural drift.
+**42 of ~580 checked.** Drifts so far: Ambush (text only, fixed), the Power Token
+faces on Eye on the Prize and Gauntlet Blade (behavioural, fixed) and on Marked
+Territory (text only, fixed), and the Eye/Eyes name (open).
 
 alexanbv 2026-08-19: "Remember most cards are IACP cards" — so there is no
 meaningful non-IACP subset to skip. Sweep everything.
