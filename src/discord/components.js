@@ -1081,10 +1081,15 @@ export function getDcActionButtons(msgId, dcName, displayName, actionsDataOrRema
       // Condition-discard row: Remove Stun + Remove Bleed (1 action each)
       // when applicable. Surface as a separate row so the action row stays
       // tight at 4 buttons (Move/Attack/Heroic/Interact).
+      // alexanbv 2026-08-21: "condition discards count as special actions", and
+      // "A disabled figure who is also stunned or bleeding may not discard it".
+      // Disable reads "cannot use Special Actions this round", so it reaches
+      // these too. handleDcRemoveStun / handleDcRemoveBleed are the real gate.
+      const _condDisabled = !!game?.disabledFigures?.includes(displayName || dcName);
       if (isStunned || isBleeding) {
         const condBtns = [];
-        if (isStunned) condBtns.push(new ButtonBuilder().setCustomId(`dc_remove_stun_${msgId}_f${selectedFigure}`).setLabel(`Remove Stun${suffix} (1 Action)`.slice(0, 80)).setStyle(ButtonStyle.Danger).setDisabled(noActions));
-        if (isBleeding) condBtns.push(new ButtonBuilder().setCustomId(`dc_remove_bleed_${msgId}_f${selectedFigure}`).setLabel(`Remove Bleed${suffix} (1 Action)`.slice(0, 80)).setStyle(ButtonStyle.Danger).setDisabled(noActions));
+        if (isStunned) condBtns.push(new ButtonBuilder().setCustomId(`dc_remove_stun_${msgId}_f${selectedFigure}`).setLabel(`Remove Stun${suffix} (1 Action)`.slice(0, 80)).setStyle(ButtonStyle.Danger).setDisabled(noActions || _condDisabled));
+        if (isBleeding) condBtns.push(new ButtonBuilder().setCustomId(`dc_remove_bleed_${msgId}_f${selectedFigure}`).setLabel(`Remove Bleed${suffix} (1 Action)`.slice(0, 80)).setStyle(ButtonStyle.Danger).setDisabled(noActions || _condDisabled));
         if (condBtns.length) rows.push(new ActionRowBuilder().addComponents(...condBtns));
       }
       // Phase 2 (destruct 2026-05-07): "End Figure" button lets the

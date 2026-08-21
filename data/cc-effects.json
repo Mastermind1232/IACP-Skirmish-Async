@@ -11,7 +11,7 @@
       "cost": 2,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. During this round, apply +5 Health to each of your WOOKIES.",
+      "effect": "Use at the start of a round. During this round, apply +5 Health to each of your WOOKIEES.",
       "abilityId": "Adrenaline"
     },
     "Advance Warning": {

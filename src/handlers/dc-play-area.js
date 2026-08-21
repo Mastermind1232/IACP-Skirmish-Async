@@ -502,6 +502,16 @@ export async function handleDcRemoveStun(interaction, ctx) {
     return;
   }
 
+  // alexanbv 2026-08-21: "condition discards count as special actions", and
+  // "A disabled figure who is also stunned or bleeding may not discard it".
+  // Disable's text is "cannot use Special Actions this round", so it reaches the
+  // discards too.
+  const _rsDisplayName = meta.displayName || meta.dcName;
+  if (game.disabledFigures?.includes(_rsDisplayName)) {
+    await interaction.followUp({ content: `**${_rsDisplayName}** is Disabled — discarding a condition is a Special Action, so it cannot be used this round.`, ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
   const figureKey = `${meta.dcName}-${dgIndex}-${figureIndex}`;
   const conds = game.figureConditions?.[figureKey] || [];
@@ -605,6 +615,13 @@ export async function handleDcRemoveBleed(interaction, ctx) {
   const actionsRemaining = figureActionsRemaining(actionsData, actionsData?.selectedFigure ?? 0);
   if (actionsRemaining <= 0) {
     await interaction.followUp({ content: 'No actions remaining this activation.', ephemeral: true }).catch(discordCatch);
+    return;
+  }
+
+  // Same Disable gate as Remove Stun — see the note there (alexanbv 2026-08-21).
+  const _rbDisplayName = meta.displayName || meta.dcName;
+  if (game.disabledFigures?.includes(_rbDisplayName)) {
+    await interaction.followUp({ content: `**${_rbDisplayName}** is Disabled — discarding a condition is a Special Action, so it cannot be used this round.`, ephemeral: true }).catch(discordCatch);
     return;
   }
 

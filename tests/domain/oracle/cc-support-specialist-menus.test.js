@@ -181,3 +181,98 @@ describe('a granted action costs the interrupting figure nothing', () => {
     assert.equal(game2.activationLockKey, 'm-real_f0');
   });
 });
+
+describe('condition discards are Special Actions (alexanbv 2026-08-21)', () => {
+  // "condition discards count as special actions"
+  // "they are different discards, and a figure cannot be double stunned. So a
+  //  figure could discard stunned and bleeding."
+  // "A disabled figure who is also stunned or bleeding may not discard it"
+  const gaMeta = { gameId: 'g-cd', playerNum: 1, dcName: 'Rancor', displayName: 'Rancor [Group 1]' };
+  const R = 'Rancor-1-0';
+  const deps = () => ({ getDcActionButtons, getDcStats, getPlayerNumForMsgId: () => 1, msgId: 'm-cd' });
+  const mk = (conds, disabled = false) => ({
+    gameId: 'g-cd',
+    figurePositions: { 1: { [R]: 'e19' } },
+    figureConditions: { [R]: conds },
+    ...(disabled ? { disabledFigures: ['Rancor [Group 1]'] } : {}),
+  });
+
+  it('offers BOTH discards to a figure that is Stunned and Bleeding', () => {
+    const keys = buildGrantedActionOptions(mk(['Stun', 'Bleed']), gaMeta, R, deps()).map((o) => o.key);
+    assert.ok(keys.includes('stun') && keys.includes('bleed'),
+      `both discards are separate Special Actions, got ${keys.join()}`);
+  });
+
+  it('withholds the discards from a Disabled figure', () => {
+    const keys = buildGrantedActionOptions(mk(['Stun', 'Bleed'], true), gaMeta, R, deps()).map((o) => o.key);
+    assert.ok(!keys.includes('stun'), `Disabled blocks the Stun discard, got ${keys.join()}`);
+    assert.ok(!keys.includes('bleed'), `Disabled blocks the Bleed discard, got ${keys.join()}`);
+    // Move and Attack are absent here because of the Stun, not the Disable.
+    assert.ok(keys.includes('interact'), 'Disable only reaches Special Actions');
+  });
+
+  it('a Disabled but only-Bleeding figure keeps Move and Attack', () => {
+    const keys = buildGrantedActionOptions(mk(['Bleed'], true), gaMeta, R, deps()).map((o) => o.key);
+    assert.ok(!keys.includes('bleed'), `Disabled blocks the discard, got ${keys.join()}`);
+    assert.ok(keys.includes('move') && keys.includes('attack'),
+      `Disable must not touch Move or Attack, got ${keys.join()}`);
+  });
+});
+
+describe('Jundland Terror grants attack OR Special Action, discards included', () => {
+  // alexanbv 2026-08-21: "confirm that Junland terror is 'attack or special
+  // action' not just any action" — so no Move and no Interact — but condition
+  // discards ARE Special Actions and belong on the menu.
+  const MSGJ = 'msg-jt';
+  const TUSKEN = 'Tusken Raider-1-0';
+  const jtMeta = () => new Map([[MSGJ, {
+    gameId: 'g-jt', playerNum: 1, dcName: 'Tusken Raider', displayName: 'Tusken Raider [Group 1]',
+  }]]);
+  const jtGame = (conds = [], disabled = false) => ({
+    gameId: 'g-jt',
+    selectedMap: { id: 'mos-eisley-outskirts' },
+    figurePositions: { 1: { [TUSKEN]: 'e19' } },
+    figureConditions: { [TUSKEN]: conds },
+    ...(disabled ? { disabledFigures: ['Tusken Raider [Group 1]'] } : {}),
+  });
+
+  const modeMenu = (game) => resolveAbility('Jundland Terror', {
+    game, playerNum: 1, dcMessageMeta: jtMeta(), chosenFigureKey: TUSKEN,
+  });
+
+  it('never offers Move or Interact', () => {
+    const r = modeMenu(jtGame(['Stun', 'Bleed']));
+    assert.equal(r.requiresChoice, true);
+    const joined = (r.choiceOptions || []).join(' | ');
+    assert.ok(!/\bMove\b/i.test(joined), `Jundland is attack or Special Action only, got ${joined}`);
+    assert.ok(!/\bInteract\b/i.test(joined), `Jundland is attack or Special Action only, got ${joined}`);
+  });
+
+  it('offers both discards when the figure is Stunned and Bleeding', () => {
+    const opts = modeMenu(jtGame(['Stun', 'Bleed'])).choiceOptions || [];
+    assert.ok(opts.includes('Jundland: Discard Stun'), opts.join(' | '));
+    assert.ok(opts.includes('Jundland: Discard Bleed'), opts.join(' | '));
+  });
+
+  it('offers no discard the figure does not need', () => {
+    const opts = modeMenu(jtGame([])).choiceOptions || [];
+    assert.ok(!opts.some((o) => o.startsWith('Jundland: Discard')), opts.join(' | '));
+  });
+
+  it('withholds specials AND discards from a Disabled figure, keeping Attack', () => {
+    const opts = modeMenu(jtGame(['Stun'], true)).choiceOptions || [];
+    assert.deepEqual(opts, ['Jundland: Attack'], opts.join(' | '));
+  });
+
+  it('resolving a discard removes the condition and still grants the 2 MP', () => {
+    const game = jtGame(['Stun', 'Bleed']);
+    const r = resolveAbility('Jundland Terror', {
+      game, playerNum: 1, dcMessageMeta: jtMeta(),
+      chosenFigureKey: TUSKEN, chosenOption: 'Jundland: Discard Stun',
+    });
+    assert.equal(r.applied, true);
+    assert.ok(!(game.figureConditions[TUSKEN] || []).includes('Stun'), 'Stun discarded');
+    assert.ok((game.figureConditions[TUSKEN] || []).includes('Bleed'), 'Bleed untouched — different discard');
+    assert.equal(game.pendingMoveX?.[r.pendingMoveXMsgId]?.remaining, 2, 'the 2 MP are still granted');
+  });
+});

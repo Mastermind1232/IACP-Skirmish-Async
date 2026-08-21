@@ -219,6 +219,45 @@ confirmed non-vacuous by reintroducing each defect. The flag key
 the ledger and the wiring probes; the range now lives in the data and the
 comment says so.
 
+| There Is No Try | IACP Approved | matches |
+| Transmit the Plans | IACP Approved | matches |
+| Whistling Birds | IACP Season 4.1 | matches |
+| Windfall | IACP Season 5.1 | matches |
+| Jundland Terror | (LFL/FFG footer) | matches, and confirmed narrow: "attack or Special Action", not any action |
+| Smuggler's Tricks | (LFL/FFG footer) | matches; retagged `specialAction`, see below |
+| A Powerful Influence | (LFL/FFG footer) | matches |
+| Adrenaline | (LFL/FFG footer) | **TEXT DRIFT, FIXED 2026-08-21.** Card prints "WOOKIEES"; our text said "WOOKIES". Display only, the resolver keys on the WOOKIEE keyword. Also corrected a comment at `abilities.js` that claimed the figures suffer 5 Damage at end of round; they do not, the +5 max is reverted and current is clamped (`round.js:737`). |
+| Advance Warning | (LFL/FFG footer) | matches |
+| Against the Odds | (LFL/FFG footer) | matches |
+| Arcing Shot | (LFL/FFG footer) | matches |
+| Armed Escort | (LFL/FFG footer) | matches |
+| Balancing Force | (LFL/FFG footer) | matches |
+| Ballistics Matrix | (LFL/FFG footer) | matches |
+
+### Condition discards are Special Actions (RESOLVED 2026-08-21)
+
+alexanbv: "condition discards count as special actions", then, on the two
+follow-ups: "they are different discards, and a figure cannot be double stunned.
+So a figure could discard stunned and bleeding" and "A disabled figure who is
+also stunned or bleeding may not discard it".
+
+Three consequences, all implemented:
+
+1. **Disable now blocks them.** Disable reads "cannot use Special Actions this
+   round", so a Disabled figure cannot discard Stun or Bleed. Gated in
+   `handleDcRemoveStun` / `handleDcRemoveBleed`, in the button render
+   (`components.js`), and in the granted-action menu.
+2. **Both discards remain available together.** They are separate Special
+   Actions, so a figure holding both spends two actions and clears both. Nothing
+   treats them as one shared once-per-activation special.
+3. **Jundland Terror offers them.** The card grants "an attack or Special
+   Action", so its mode menu now lists the discards the chosen figure can
+   actually make. Confirmed with alexanbv that Jundland stays narrow otherwise:
+   it grants attack or Special Action, NOT any action, so no Move and no
+   Interact. The card's arrow icon and our stored text both say so.
+
+Guarded in `tests/domain/oracle/cc-support-specialist-menus.test.js`.
+
 ### Naming: match the printed card (RESOLVED 2026-08-21)
 
 alexanbv, asked to rule on the class rather than card by card: **"match printed
@@ -302,7 +341,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**65 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**79 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and

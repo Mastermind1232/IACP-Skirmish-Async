@@ -12474,21 +12474,45 @@ export function resolveAbility(abilityId, context) {
     // Phase 2b can re-dispatch the exact dc_special_<idx> into handleDcAction.
     const _JT_ATTACK = 'Jundland: Attack';
     const _JT_SPECIAL_PREFIX = 'Jundland: Special: ';
+    // alexanbv 2026-08-21: "condition discards count as special actions", so a
+    // card granting "an attack or Special Action" grants these too.
+    const _JT_DISCARD_STUN = 'Jundland: Discard Stun';
+    const _JT_DISCARD_BLEED = 'Jundland: Discard Bleed';
     const _jtIsAttack = chosenOption === _JT_ATTACK;
     const _jtSpecialMatch = typeof chosenOption === 'string' && chosenOption.startsWith(_JT_SPECIAL_PREFIX)
       ? chosenOption.match(/ #(\d+)$/)
       : null;
     const _jtIsSpecial = !!_jtSpecialMatch;
-    const _jtIsMode = _jtIsAttack || _jtIsSpecial;
+    const _jtDiscard = chosenOption === _JT_DISCARD_STUN ? 'Stun'
+      : chosenOption === _JT_DISCARD_BLEED ? 'Bleed' : null;
+    const _jtIsMode = _jtIsAttack || _jtIsSpecial || !!_jtDiscard;
     // Phase 2a: a figure was picked but no mode yet → list Attack PLUS one
     // option per Special Action that figure has. All directly selectable.
     if (chosenFigureKey && !_jtIsMode) {
       const targetName = dcNameFromFigureKey(chosenFigureKey);
       const specials = getNativeSpecialActionsForDc(targetName);
-      const choiceOptions = [_JT_ATTACK, ...specials.map((s) => `${_JT_SPECIAL_PREFIX}${s.label} #${s.index}`)];
+      // Condition discards are Special Actions (alexanbv 2026-08-21), and they
+      // are two DIFFERENT discards: "a figure could discard stunned and
+      // bleeding". Disable blocks all of them for the round — "A disabled figure
+      // who is also stunned or bleeding may not discard it".
+      const _jtTargetMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
+      const _jtTargetMeta = _jtTargetMsgId ? dcMessageMeta.get(_jtTargetMsgId) : null;
+      const _jtDisplay = _jtTargetMeta?.displayName || _jtTargetMeta?.dcName || targetName;
+      const _jtDisabled = !!game.disabledFigures?.includes(_jtDisplay);
+      const _jtConds = game.figureConditions?.[chosenFigureKey] || [];
+      const _jtDiscardOpts = _jtDisabled ? [] : [
+        ...(_jtConds.includes('Stun') ? [_JT_DISCARD_STUN] : []),
+        ...(_jtConds.includes('Bleed') ? [_JT_DISCARD_BLEED] : []),
+      ];
+      const _jtSpecialOpts = _jtDisabled ? [] : specials.map((s) => `${_JT_SPECIAL_PREFIX}${s.label} #${s.index}`);
+      const choiceOptions = [_JT_ATTACK, ..._jtSpecialOpts, ..._jtDiscardOpts];
       const choiceValues = choiceOptions.map(() => chosenFigureKey);
-      const _specText = specials.length
-        ? ` or a **Special Action** (${specials.map((s) => s.label).join(', ')})`
+      const _specBits = [
+        ..._jtSpecialOpts.length ? [`a **Special Action** (${specials.map((s) => s.label).join(', ')})`] : [],
+        ..._jtDiscardOpts.length ? [`a **condition discard** (${_jtDiscardOpts.map((o) => o.replace('Jundland: Discard ', '')).join(', ')})`] : [],
+      ];
+      const _specText = _specBits.length
+        ? ` or ${_specBits.join(' or ')}`
         : ' (no Special Actions available — Attack only)';
       return {
         applied: false,
@@ -12506,6 +12530,32 @@ export function resolveAbility(abilityId, context) {
       const targetName = dcNameFromFigureKey(chosenFigureKey);
       if (!targetMsgId) {
         return { applied: false, manualMessage: `**Jundland Terror** — could not locate **${targetName}**'s play area; resolve manually.` };
+      }
+      // Discard mode: no target picker, no dice, no thread — resolve it here and
+      // still grant the 2 MP via the ordinary picker below by falling through
+      // with no interrupt chained.
+      if (_jtDiscard) {
+        filterCondition(game, chosenFigureKey, _jtDiscard);
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[targetMsgId] = {
+          remaining: 2,
+          source: 'Jundland Terror',
+          playerNum,
+          figureKey: chosenFigureKey,
+          dcName: targetName,
+          threadId: null,
+          bypassCosts: false,
+          allowAbilitySpend: true,
+          msgId: targetMsgId,
+          nextAction: null,
+        };
+        return {
+          applied: true,
+          pendingMoveXMsgId: targetMsgId,
+          refreshDcEmbedMsgIds: [targetMsgId],
+          activeMsgId: targetMsgId,
+          logMessage: `**Jundland Terror** — **${targetName}** discards **${_jtDiscard === 'Stun' ? 'Stunned' : 'Bleeding'}** and gains **2 MP**.`,
+        };
       }
       const wantsSpecial = _jtIsSpecial;
       const _jtSpecialIdx = _jtIsSpecial ? parseInt(_jtSpecialMatch[1], 10) : -1;
@@ -15811,7 +15861,10 @@ export function resolveAbility(abilityId, context) {
 
   // (Duplicate mpBonus handler removed — primary handler at line ~3072 covers all cases)
 
-  // ccEffect: adrenalineEffect (Adrenaline) — +5 Health to each friendly WOOKIEE this round; at end of round each suffers 5 Damage
+  // ccEffect: adrenalineEffect (Adrenaline) — +5 Health to each friendly WOOKIEE
+  // this round. At end of round the +5 MAX is reverted and current is clamped to
+  // it (round.js:737) — the figure does NOT suffer 5 Damage; the older comment
+  // here said it did and was wrong (audit 2026-08-21).
   if (entry.type === 'ccEffect' && entry.adrenalineEffect) {
     const { game, playerNum, dcHealthState } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve manually: apply +5 Health to each of your WOOKIEEs this round.' };

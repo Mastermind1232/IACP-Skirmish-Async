@@ -81,10 +81,12 @@ export function buildGrantedActionOptions(game, meta, figureKey, deps = {}) {
     return [];
   }
 
-  // Disable (the CC) blocks Special Actions for the round. handleDcAction is the
-  // real gate and rejects the click, but the button builder does not know about
-  // it, so offering a special here would just hand the player a dead button.
+  // Disable (the CC) blocks Special Actions for the round — and alexanbv
+  // 2026-08-21 ruled that "condition discards count as special actions", so
+  // "A disabled figure who is also stunned or bleeding may not discard it".
+  // The handlers are the real gate; this keeps dead buttons off the menu.
   const disabledFigure = !!game.disabledFigures?.includes(meta.displayName || meta.dcName);
+  const DISABLE_BLOCKS = (key) => key.startsWith('special:') || key === 'stun' || key === 'bleed';
 
   const out = [];
   const seen = new Set();
@@ -95,7 +97,7 @@ export function buildGrantedActionOptions(game, meta, figureKey, deps = {}) {
       if (!id || data?.disabled) continue;
       const key = grantedActionKeyFor(id);
       if (!key || seen.has(key)) continue;
-      if (disabledFigure && key.startsWith('special:')) continue;
+      if (disabledFigure && DISABLE_BLOCKS(key)) continue;
       seen.add(key);
       out.push({ key, label: String(data.label || key).slice(0, 80), style: data.style ?? ButtonStyle.Secondary });
     }
