@@ -258,7 +258,7 @@
     },
     "Balancing Force": {
       "type": "ccEffect",
-      "label": "Each player: roll red die, all damaged figures recover Damage = Damage",
+      "label": "Each player chooses up to 3 figures; roll 1 red die; each chosen figure recovers Damage = Hit results",
       "balancingForceEffect": true,
       "wiredStatus": "wired"
     },
@@ -930,7 +930,7 @@
     },
     "Corrupting Force": {
       "type": "ccEffect",
-      "label": "Roll 1 blue die; all figures suffer Damage = Damage",
+      "label": "Each player chooses up to 3 figures; roll 1 blue die; each chosen figure suffers Damage = Hit results",
       "corruptingForceEffect": true,
       "wiredStatus": "wired"
     },
@@ -1117,7 +1117,7 @@
     },
     "Dark Energy": {
       "type": "ccEffect",
-      "label": "Choose SMALL hostile within 3: push 1 space, then deal 1 Damage",
+      "label": "Choose another SMALL figure within 3 (friendly or hostile): push 1 space, then deal 1 Damage",
       "darkEnergyEffect": true,
       "wiredStatus": "wired"
     },

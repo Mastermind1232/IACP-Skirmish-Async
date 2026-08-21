@@ -13618,7 +13618,8 @@ export function resolveAbility(abilityId, context) {
     return { requiresChoice: true, choiceOptions: opts, choiceValues: vals };
   }
 
-  // ccEffect: darkEnergyEffect — choose SMALL hostile within 3; push 1 space; deal 1 Damage
+  // ccEffect: darkEnergyEffect — choose ANOTHER SMALL figure within 3 (friendly
+  // OR hostile; the card does not say hostile); push 1 space; deal 1 Damage
   // Phase 1: SMALL within-3 picker; Phase 2: pick landing space for push; Phase 3: push + deal 1 Damage
   if (entry.type === 'ccEffect' && entry.darkEnergyEffect) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenFigureKey, chosenSpace } = context;
@@ -13674,7 +13675,7 @@ export function resolveAbility(abilityId, context) {
       const nm = dcNameFromFigureKey(chosenFigureKey);
       return { requiresSpaceChoice: true, validSpaces, chosenFigureKey, spaceChoiceLabel: `**Dark Energy** — Push **${nm}** to which space?` };
     }
-    // Phase 1: find SMALL hostiles within 3 of activating figure
+    // Phase 1: find SMALL figures within 3 of the activating figure, either side
     if (!mapId) return { applied: false, manualMessage: 'Resolve Dark Energy manually (no map).' };
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };

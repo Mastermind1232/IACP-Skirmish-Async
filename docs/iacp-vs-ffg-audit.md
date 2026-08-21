@@ -282,6 +282,33 @@ use the chosen figure.
 Not changed. BA's targeting already carries rulings and the Lando / Gambit /
 Shrewd Scoundrel interaction is delicate, so this needs alexanbv first.
 
+| Corrupting Force | (LFL/FFG) | matches; shares the "each player picks up to 3" machinery with Chaotic Force. Library label said "all figures"; corrected. |
+| Counter Attack | (LFL/FFG) | matches |
+| Cripple | (LFL/FFG) | matches |
+| Cruel Strike | (LFL/FFG) | matches (fixed "Perform an an attack" in our stored text) |
+| Crush | (LFL/FFG) | matches |
+| Cut Lines | (LFL/FFG) | matches |
+| Dangerous Bargains | (LFL/FFG) | matches |
+| Dark Energy | (LFL/FFG) | matches. The card says "another **small figure**", NOT hostile, and the resolver correctly enumerates both players' figures. The library label and two comments said "hostile"; corrected before someone "fixed" the code to match them. |
+| Balancing Force | (LFL/FFG) | matches; same up-to-3 machinery. Library label corrected likewise. |
+| Data Theft | (LFL/FFG) | matches |
+| Deadeye | (LFL/FFG) | matches |
+| Deadly Precision | (LFL/FFG) | matches |
+| Deathblow | (LFL/FFG) | matches |
+| Blaze of Glory (Mara) | n/a | confirmed Mara-aware with IG-88 also in the list; see the tests noted below |
+
+### Stale library labels are worth fixing
+
+`entry.label` is not dead metadata: it surfaces to players in manual-resolve
+fallbacks and in several prompts. Four labels contradicted their own cards and
+have been corrected: Chaotic Force / Corrupting Force / Balancing Force all said
+"all figures" where the card and the resolver do "each player chooses up to 3",
+Change of Plans dropped the "equal or lower cost" half of its condition, and Dark
+Energy said "hostile" where the card says "another small figure" either side.
+
+The Dark Energy one is the cautionary case: the code was right and the label was
+wrong, so the danger was someone later "correcting" the code to match the label.
+
 ### Condition discards are Special Actions (RESOLVED 2026-08-21)
 
 alexanbv: "condition discards count as special actions", then, on the two
@@ -389,7 +416,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**103 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**115 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and
