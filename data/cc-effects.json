@@ -110,7 +110,7 @@
       "cost": 1,
       "playableBy": "SPY",
       "timing": "duringActivation",
-      "effect": "Use during your activation while in your opponents deployment zone to look at the top 3 cards of their Command deck and return those cards in any order.",
+      "effect": "Use during your activation while in your opponent's deployment zone to look at the top 3 cards of their Command deck and return those cards in any order.",
       "abilityId": "Behind Enemy Lines"
     },
     "Black Market Prices": {
@@ -315,7 +315,7 @@
       "cost": 2,
       "playableBy": "Any Figure",
       "timing": "whenCommandCardPlayed",
-      "effect": "Use when a Command card with a cost of X is played, where X is equal to or less than the number of friendly SPY groups on the map. Discard that card and cancel is effects.",
+      "effect": "Use when a Command card with a cost of X is played, where X is equal to or less than the number of friendly SPY groups on the map. Discard that card and cancel its effects.",
       "abilityId": "Comm Disruption"
     },
     "Concentrated Fire": {

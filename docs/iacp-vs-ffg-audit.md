@@ -234,6 +234,54 @@ comment says so.
 | Balancing Force | (LFL/FFG footer) | matches |
 | Ballistics Matrix | (LFL/FFG footer) | matches |
 
+| Battlefield Awareness | (LFL/FFG) | text matches. **OPEN:** its "within 3 spaces" is measured from the ACTIVATING figure, but the card is a reaction played by a Leader while someone else attacks, so it should measure from the Leader. See the open item below. |
+| Behind Enemy Lines | (LFL/FFG) | matches (fixed a missing apostrophe in our stored text) |
+| Black Market Prices | (LFL/FFG) | matches |
+| Bladestorm | (LFL/FFG) | matches; `attackSurgeBonus 1`, `postAttackAoeDamage 1`, `postAttackAoeRange 2` |
+| Blaze of Glory | (LFL/FFG) | matches; verified it readies IG-88's OWN card, not whichever DC just activated |
+| Blitz | (LFL/FFG) | matches |
+| Blood Feud | (LFL/FFG) | matches |
+| Bodyguard | (LFL/FFG) | matches |
+| Brace for Impact | (LFL/FFG) | matches |
+| Brace Yourself | (LFL/FFG) | matches |
+| Burst Fire | (LFL/FFG) | matches |
+| Call the Vanguard | (LFL/FFG) | matches; grants "a move and an attack" specifically, so the granted-ACTION menu does not apply |
+| Camouflage | (LFL/FFG) | matches |
+| Capture the Weary | (LFL/FFG) | matches |
+| Celebration | (LFL/FFG) | matches |
+| Change of Plans | (LFL/FFG) | matches; verified the resolver enforces BOTH "equal or lower cost" and the shared trait. Library label had dropped the cost half; corrected. |
+| Chaotic Force | (LFL/FFG) | matches; verified each player picks **up to 3** with a Done option. Library label said "all figures"; corrected. |
+| Cheat to Win | (LFL/FFG) | matches |
+| Collateral Damage | (LFL/FFG) | matches; verified the defender is excluded from the candidate list and objects are included |
+| Collect Intel | (LFL/FFG) | matches |
+| Combat Resupply | (LFL/FFG) | matches |
+| Comm Disruption | (LFL/FFG) | matches (fixed "cancel is effects" to "cancel its effects" in our stored text) |
+| Concentrated Fire | (LFL/FFG) | matches |
+| Coordinated Attack | (LFL/FFG) | matches; card prints the DOUBLE Special Action arrow and our timing is `doubleActionSpecial` |
+
+### Open: Battlefield Awareness measures range from the wrong figure
+
+Card: "Use after another friendly figure within 3 spaces rolls any number of dice
+to reroll 1 of those dice." alexanbv 2026-06-17: "played by a Leader while
+someone ELSE within 3 spaces is attacking. The die is rerolled, technically the
+Leader playing BA is the one doing it, which only matters in this case for
+Lando."
+
+`abilities.js:14597` measures the range from `actPos`, the ACTIVATING figure, and
+excludes that DC's figures from the candidate list. Since the card is a reaction
+played by the Leader while someone else attacks, the range should be measured
+from the Leader, and the figure that rolled (the attacker, who IS the activating
+figure) is precisely the one being excluded.
+
+Mitigating: in live combat the queue entry is `pool: 'attack'` keyed to
+`combat.attackerPlayerNum`, so the reroll lands in the right pool no matter which
+figure the picker named — the chosen name only labels the log. The
+out-of-combat path (grant the reroll to a figure's next attack this round) does
+use the chosen figure.
+
+Not changed. BA's targeting already carries rulings and the Lando / Gambit /
+Shrewd Scoundrel interaction is delicate, so this needs alexanbv first.
+
 ### Condition discards are Special Actions (RESOLVED 2026-08-21)
 
 alexanbv: "condition discards count as special actions", then, on the two
@@ -341,7 +389,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**79 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**103 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and

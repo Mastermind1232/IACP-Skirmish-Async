@@ -701,12 +701,12 @@
     "Change of Plans": {
       "type": "ccEffect",
       "changeOfPlansEffect": true,
-      "label": "After activation: exhaust one of your DCs to ready another sharing a keyword/trait",
+      "label": "After activation: exhaust one of your DCs to ready another of equal or lower cost sharing a trait",
       "wiredStatus": "wired"
     },
     "Chaotic Force": {
       "type": "ccEffect",
-      "label": "Roll 1 green die; all figures suffer Strain = Accuracy result",
+      "label": "Each player chooses up to 3 figures; roll 1 green die; each chosen figure suffers Strain = Accuracy",
       "chaoticForceEffect": true,
       "wiredStatus": "wired"
     },
