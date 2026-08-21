@@ -187,6 +187,31 @@ Unlike Deploy the Garrison this is a different word rather than punctuation, and
 it is the name a player reads on the card. Raised with alexanbv 2026-08-21;
 awaiting his call before the rename.
 
+| Iron Will | IACP Approved | matches |
+| Just Business | 8.0 Playtest (Season 8) | matches, including the Scum affiliation icon |
+| Karabast! | IACP Approved | matches |
+| Lightbow | IACP Approved | matches, all three bullet abilities |
+| Overwhelming Impact | Rebalanced | matches |
+| Paid in Beskar | 11.0 Playtest (Season 11) | matches; prints the Block face and we store Block |
+| Personal Energy Shield | IACP Approved | matches; prints the Evade face and we store Evade |
+| Preservation Protocol | IACP Approved | matches |
+| Rapid Recalibration | IACP Season 5 | matches |
+| Reactive Loyalties | IACP Season 5.1 | matches, all three affiliation branches |
+| Reduce to Rubble | IACP Approved | matches |
+| Rest in Peace | IACP Season 5 | matches; the card carries no trait band, so `playableBy: "Any Figure"` is right |
+| Retaliation | IACP Approved | matches; prints the Hit face and we store Hit Tokens |
+| Reverse Engineer | IACP Approved | **DRIFT, FIXED 2026-08-21.** The card reads "you may use **[Surge]** abilities on the defender's Deployment card". Our stored text dropped the Surge qualifier, which reads as every ability. Behaviour was already right: `combat.js:247` swaps only the surge-ability source. Corrected in `cc-effects.json`, `combat-spec.csv` and the snapshot. |
+| Savage Vigor | IACP Approved | matches |
+
+### Absences that are not gaps
+
+- **No Cheating** has an image in `vassal_extracted/images/cc/` but no entry in
+  `cc-effects.json`. That is correct: it is the Asajj-Ventress-only CC, removed
+  with her on 2026-05-07 per destruct 2026-05-05.
+- **`abilityId` is optional.** 44 of the 292 CC entries omit it, including cards
+  known to work (Mandalorian Steel, Stimulants, Tough Luck, Son of Skywalker).
+  A missing `abilityId` is not evidence of a missing implementation.
+
 ### Naming decision: Deploy the Garrison (RESOLVED 2026-08-21)
 
 The printed card title is `Deploy the Garrison!` with a trailing exclamation mark.
@@ -205,9 +230,10 @@ known cosmetic difference and is not drift.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**42 of ~580 checked.** Drifts so far: Ambush (text only, fixed), the Power Token
+**57 of ~580 checked.** Drifts so far: Ambush (text only, fixed), the Power Token
 faces on Eye on the Prize and Gauntlet Blade (behavioural, fixed) and on Marked
-Territory (text only, fixed), and the Eye/Eyes name (open).
+Territory (text only, fixed), Reverse Engineer's dropped Surge qualifier (text
+only, fixed), and the Eye/Eyes name (open).
 
 alexanbv 2026-08-19: "Remember most cards are IACP cards" — so there is no
 meaningful non-IACP subset to skip. Sweep everything.

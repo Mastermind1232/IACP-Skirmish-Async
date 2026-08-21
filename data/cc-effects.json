@@ -1598,7 +1598,7 @@
       "cost": 0,
       "playableBy": "TECHNICIAN",
       "timing": "specialAction",
-      "effect": "Special Action: Perform an attack. During this attack, you may use abilities on the defender's Deployment card instead of your own. Apply +1 Surge to the attack results."
+      "effect": "Special Action: Perform an attack. During this attack, you may use Surge abilities on the defender's Deployment card instead of your own. Apply +1 Surge to the attack results."
     },
     "Right Back At Ya!": {
       "cost": 1,
