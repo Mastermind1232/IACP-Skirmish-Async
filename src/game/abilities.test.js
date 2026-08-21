@@ -2295,8 +2295,12 @@ test('Merciless: deck too small → no choice, card player gains VP directly', (
   assert.strictEqual(game.player1VP.total, 3);
 });
 
-test('Support Specialist Phase 2 attack option grants a free interrupt attack', () => {
-  // CSV: "That figure interrupts to perform an action" — now offers attack, not just move.
+test('Support Specialist Phase 2 hands the chosen figure to the granted-action menu', () => {
+  // CSV: "That figure interrupts to perform an action". alexanbv 2026-08-21:
+  // that means ANY action, so picking the figure no longer picks the action —
+  // it opens the granted-action menu, which is where move/attack/interact/
+  // special/discard-Stun/discard-Bleed are offered. Behaviour of that menu lives
+  // in tests/domain/oracle/cc-support-specialist-menus.test.js.
   const msgId = 'msg-ss';
   const figureKey = 'C1-10P-1-0';
   const game = {
@@ -2306,11 +2310,13 @@ test('Support Specialist Phase 2 attack option grants a free interrupt attack', 
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-ss', playerNum: 1, dcName: 'C1-10P', displayName: 'C1-10P [Group 1]' }]]);
   const result = resolveAbility('Support Specialist', {
-    game, playerNum: 1, dcMessageMeta, chosenFigureKey: `${figureKey}|attack`,
+    game, playerNum: 1, dcMessageMeta, chosenFigureKey: figureKey,
   });
   assert.strictEqual(result.applied, true);
-  assert.ok(game.freeAttackBonusPending?.[figureKey]);
-  assert.match(result.logMessage, /free attack/i);
+  assert.strictEqual(result.grantedActionMenu?.granteeFigureKey, figureKey);
+  assert.strictEqual(result.grantedActionMenu?.sourceLabel, 'Support Specialist');
+  // Nothing is booked until the player answers the second menu.
+  assert.strictEqual(game.freeAttackBonusPending, undefined);
 });
 
 test('Field Supply: token-type choice (Hit vs Surge) and up to 2 figures', () => {

@@ -264,8 +264,36 @@ rather than from the DC's Special Action button: **Support Specialist** and
 
 Support Specialist's picker was also rebuilt as two menus. It used to be one flat
 list crossing every eligible figure with every action, which grows as figures x
-actions; it is now figure first, then that figure's action. Guarded by
-`tests/domain/oracle/cc-support-specialist-menus.test.js`.
+actions; it is now figure first, then that figure's action.
+
+The second menu is a new shared primitive, `src/handlers/granted-action.js`,
+because alexanbv widened the scope on the same day: "perform an action refers to
+any action, including interact move attack or special action. No rest actions in
+skirmish", then "you must do all of them. Remember that there are other
+possibilities for actions also include: discarding bleed / Discarding stun /
+Special actions from mission rules."
+
+Rather than enumerate that list a second time, the menu renders the grantee's
+real DC buttons through `getDcActionButtons` and rewrites their custom ids to
+route back through the ordinary action pipeline. That inherits, for free, every
+rule the play area already knows: attachment-injected and mission-injected
+specials, specials an attachment removes, Stun blocking Move and Attack but not
+Interact or Specials, and the condition-discard row. A second copy of that list
+is exactly the kind of duplication that produced the MASSIVE line-of-sight defect.
+
+The interrupting figure is not activating, so it has no action economy. The flow
+stamps `grantedAction: true` on the synthesized context and
+`consumeActionForCurrentFigure` early-returns on it, which also stops the
+interrupt from taking `game.activationLockKey` away from the real activation.
+
+Note the neighbouring ruling, which is why this is a separate primitive from the
+existing narrow granted-ATTACK button: "when it says 'may perform an attack' that
+is just a regular attack, and cannot be used for a special attack action (ex
+crippling blow on rancor)." Verified the engine already complies: the free-attack
+grant is consumed only where the action is literally Attack
+(`dc-play-area.js:2759`), and no Special Action path reads that flag.
+
+Guarded by `tests/domain/oracle/cc-support-specialist-menus.test.js`.
 
 The seven cards on `doubleActionSpecial` (Cloned Reinforcements, Coordinated
 Attack, Flurry of Blades, Maximum Firepower, New Orders, Optimal Bombardment,

@@ -567,6 +567,13 @@ export function cleanupActivation(game, msgId, playerNum, figureKeys, opts = {})
  */
 export function consumeActionForCurrentFigure(actionsData, cost = 1, game = null, msgId = null) {
   if (!actionsData || cost <= 0) return;
+  // Granted actions (alexanbv 2026-08-21: "perform an action refers to any
+  // action, including interact move attack or special action") are performed by
+  // a figure that is NOT activating, as an interrupt. It has no action economy
+  // to spend, so spending one here would both invent a budget for it and, worse,
+  // hand it game.activationLockKey below — hijacking the real activation. The
+  // granted-action flow stamps this marker on the synthesized context.
+  if (actionsData.grantedAction) return;
   // Unified activation lock (alexanbv 2026-05-10): the lock identifies
   // the exact figure currently activating as `${msgId}_f${figureIndex}`,
   // enforcing "complete one before another" at BOTH scopes:

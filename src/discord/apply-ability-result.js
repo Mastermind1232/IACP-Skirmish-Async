@@ -377,6 +377,22 @@ export async function applyAbilityResult(result, opts) {
   // wraps the existing dc_attack_ flow and the underlying pendingX state
   // (pendingEmperorInterrupt / pendingExecutiveOrder / etc.) is what marks
   // the attack as free in combat.js. See handleGrantedAttack.
+  // Granted ACTION menu (alexanbv 2026-08-21) — the wide sibling of
+  // grantedAttackButton. "perform an action" means any action, so the grantee
+  // gets a menu of everything they could legally do: move, attack, interact,
+  // native and mission-injected Special Actions, and discarding Stun or Bleed.
+  // See handlers/granted-action.js for why this is separate from the narrow
+  // granted-attack primitive.
+  if (result.applied && result.grantedActionMenu) {
+    const _gamOpts = result.grantedActionMenu;
+    try {
+      const { postGrantedActionMenu } = await import('../handlers/granted-action.js');
+      await postGrantedActionMenu(game, ctx, _gamOpts);
+    } catch (err) {
+      console.error('Failed to post granted-action menu:', err);
+    }
+  }
+
   if (result.applied && result.grantedAttackButton) {
     const { granteeMsgId, granteeFigureKey, granteeName, sourceLabel } = result.grantedAttackButton;
     if (granteeMsgId && granteeFigureKey && msgId) {

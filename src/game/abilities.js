@@ -13780,45 +13780,44 @@ export function resolveAbility(abilityId, context) {
   // available via a free-action grant, so it is NOT offered here.
   // alexanbv 2026-06-20.
   //
-  // TWO menus, not one (alexanbv 2026-08-21: "There needs to be a menu to choose
-  // which figure is being selected and then another menu for which action that
-  // figure is doing"). It used to be a single flat list that crossed every figure
-  // with every action, which grows as figures x actions and reads badly once a
-  // few troopers are in range.
-  //   Phase 1: no chosenFigureKey            -> one entry per eligible figure
-  //   Phase 2: chosenFigureKey is a bare key -> that figure's action menu
-  //   Phase 3: chosenFigureKey is `fk|action`-> grant the interrupt
+  // TWO menus (alexanbv 2026-08-21: "There needs to be a menu to choose which
+  // figure is being selected and then another menu for which action that figure
+  // is doing"), and the second one is the SHARED granted-action menu:
+  //   Phase 1: no chosenFigureKey -> one entry per eligible figure
+  //   Phase 2: a figure chosen    -> return grantedActionMenu; the poster in
+  //            handlers/granted-action.js renders every action that figure could
+  //            legally take and routes the click back through the ordinary
+  //            action pipeline.
+  //
+  // alexanbv 2026-08-21, on scope: "perform an action refers to any action,
+  // including interact move attack or special action. No rest actions in
+  // skirmish", and "you must do all of them ... discarding bleed / Discarding
+  // stun / Special actions from mission rules". Enumerating those here would be
+  // a second copy of what the DC play area already knows, so it does not.
   if (entry.type === 'ccEffect' && entry.supportSpecialistEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Phase 2: a bare figure key → open that figure's action menu.
-    if (chosenFigureKey && chosenFigureKey.lastIndexOf('|') < 0) {
-      const _fk = chosenFigureKey;
-      const _dcN = dcNameFromFigureKey(_fk) || _fk;
-      return {
-        applied: false,
-        requiresChoice: true,
-        choicePrompt: `**Support Specialist** — what does **${_dcN}** interrupt to do?`,
-        choiceOptions: [`Move: ${_dcN}`, `Attack: ${_dcN}`],
-        choiceValues: [`${_fk}|move`, `${_fk}|attack`],
-      };
-    }
-    // Phase 3: `<figureKey>|<action>` → grant the interrupt action.
+    // Phase 2: a figure was chosen → hand off to the shared granted-action menu.
     if (chosenFigureKey) {
+      // Tolerate the historical `<figureKey>|<action>` value: earlier builds
+      // bound the action into the first menu, and a stale button could still
+      // send one. The action half is dropped; the player picks it in menu 2.
       const _sep = chosenFigureKey.lastIndexOf('|');
-      const fk = chosenFigureKey.slice(0, _sep);
-      const action = chosenFigureKey.slice(_sep + 1);
+      const fk = _sep >= 0 ? chosenFigureKey.slice(0, _sep) : chosenFigureKey;
       const figMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
       if (!figMsgId) return { applied: false, manualMessage: 'Could not find figure DC — apply action manually.' };
       const dcName = dcNameFromFigureKey(fk);
-      if (action === 'attack') {
-        game.freeAttackBonusPending = game.freeAttackBonusPending || {};
-        game.freeAttackBonusPending[fk] = { from: 'Support Specialist' };
-        return { applied: true, logMessage: `**Support Specialist** — **${dcName}** may interrupt to perform a free attack. Use their **Attack** button.` };
-      }
-      const figSpeed = getDcEffects()[dcName]?.speed ?? 3;
-      addMovementPoints(game, figMsgId, figSpeed);
-      return { applied: true, logMessage: `**Support Specialist** — **${dcName}** gains ${figSpeed} MP (free interrupt move). Use their **Move** button to spend MP.` };
+      return {
+        applied: true,
+        logMessage: `**Support Specialist** — **${dcName}** interrupts to perform an action.`,
+        grantedActionMenu: {
+          granteeMsgId: figMsgId,
+          granteeFigureKey: fk,
+          granteeName: dcName,
+          sourceLabel: 'Support Specialist',
+          playerNum,
+        },
+      };
     }
     // Phase 1: find DROID/TECHNICIAN/TROOPER friendlies within 3.
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);

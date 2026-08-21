@@ -16,8 +16,13 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveAbility } from '../../../src/game/abilities.js';
-import { getCcEffect } from '../../../src/data-loader.js';
+import { getCcEffect, getDcStats } from '../../../src/data-loader.js';
 import { isCcPlayableByDc } from '../../../src/game/cc-timing.js';
+import { getDcActionButtons } from '../../../src/discord/components.js';
+import { consumeActionForCurrentFigure } from '../../../src/game/activation-state.js';
+import {
+  buildGrantedActionOptions, grantedActionCustomId, grantedActionKeyFor,
+} from '../../../src/handlers/granted-action.js';
 
 const MSG = 'msg-ss';
 const TROOP_MSG = 'msg-troop';
@@ -52,7 +57,7 @@ describe('Support Specialist is a Special Action', () => {
   });
 });
 
-describe('Support Specialist — figure menu, then action menu', () => {
+describe('Support Specialist — figure menu, then the granted-action menu', () => {
   it('menu 1 lists figures only, one entry each, with no action in the value', () => {
     const r = resolveAbility('Support Specialist', {
       game: fixture(), playerNum: 1, dcMessageMeta: meta(),
@@ -64,33 +69,115 @@ describe('Support Specialist — figure menu, then action menu', () => {
     assert.equal(r.choiceOptions.length, 2, 'no figure x action cross product');
   });
 
-  it('menu 2 offers that one figure its actions', () => {
-    const r = resolveAbility('Support Specialist', {
-      game: fixture(), playerNum: 1, dcMessageMeta: meta(), chosenFigureKey: T1,
-    });
-    assert.equal(r.requiresChoice, true);
-    assert.deepEqual(r.choiceValues, [`${T1}|move`, `${T1}|attack`]);
-    assert.ok(r.choiceValues.every((v) => v.startsWith(T1)),
-      'the action menu is scoped to the figure already chosen');
-  });
-
-  it('a bare figure key never resolves straight to a move', () => {
-    // The old code defaulted a separator-less value to `move`, which would now
-    // skip the action menu entirely.
+  it('choosing a figure hands off to the granted-action menu', () => {
     const game = fixture();
     const r = resolveAbility('Support Specialist', {
       game, playerNum: 1, dcMessageMeta: meta(), chosenFigureKey: T1,
     });
-    assert.notEqual(r.applied, true, 'picking a figure is not yet a resolution');
-    assert.equal(game.pendingMoveX, undefined);
+    assert.equal(r.applied, true);
+    assert.ok(r.grantedActionMenu, 'expected a grantedActionMenu handoff');
+    assert.equal(r.grantedActionMenu.granteeFigureKey, T1);
+    assert.equal(r.grantedActionMenu.sourceLabel, 'Support Specialist');
+    assert.equal(r.grantedActionMenu.playerNum, 1);
+    assert.ok(r.grantedActionMenu.granteeMsgId, 'the grantee DC must be resolved');
   });
 
-  it('the action choice still grants the interrupt', () => {
+  it('does not pre-commit the figure to an action', () => {
+    // The old build bound move/attack into the first menu and booked the
+    // interrupt immediately. Nothing may be granted before menu 2 is answered.
+    const game = fixture();
+    resolveAbility('Support Specialist', {
+      game, playerNum: 1, dcMessageMeta: meta(), chosenFigureKey: T1,
+    });
+    assert.equal(game.freeAttackBonusPending, undefined, 'no attack booked yet');
+    assert.equal(game.pendingMoveX, undefined, 'no move booked yet');
+  });
+
+  it('tolerates a stale `figureKey|action` value from an older button', () => {
     const game = fixture();
     const r = resolveAbility('Support Specialist', {
       game, playerNum: 1, dcMessageMeta: meta(), chosenFigureKey: `${T1}|attack`,
     });
     assert.equal(r.applied, true);
-    assert.ok(game.freeAttackBonusPending?.[T1], 'attack interrupt booked');
+    assert.equal(r.grantedActionMenu?.granteeFigureKey, T1,
+      'the action half is dropped; the player re-picks in menu 2');
+  });
+});
+
+describe('the granted-action menu covers every action alexanbv listed', () => {
+  // "perform an action refers to any action, including interact move attack or
+  //  special action. No rest actions in skirmish." + "discarding bleed /
+  //  Discarding stun / Special actions from mission rules".
+  const gaMeta = { gameId: 'g-ga', playerNum: 1, dcName: 'Rancor', displayName: 'Rancor [Group 1]' };
+  const RANCOR = 'Rancor-1-0';
+  const gaDeps = () => ({
+    getDcActionButtons, getDcStats, getPlayerNumForMsgId: () => 1, msgId: 'm-ga',
+  });
+  const gaGame = (conds = []) => ({
+    gameId: 'g-ga',
+    figurePositions: { 1: { [RANCOR]: 'e19' } },
+    figureConditions: { [RANCOR]: conds },
+  });
+
+  it('offers move, attack, interact and the native Special Action', () => {
+    const keys = buildGrantedActionOptions(gaGame(), gaMeta, RANCOR, gaDeps()).map((o) => o.key);
+    assert.ok(keys.includes('move'), keys.join());
+    assert.ok(keys.includes('attack'), keys.join());
+    assert.ok(keys.includes('interact'), keys.join());
+    assert.ok(keys.some((k) => k.startsWith('special:')), `expected a Special Action, got ${keys.join()}`);
+    assert.ok(!keys.includes('rest'), 'no rest actions in skirmish');
+  });
+
+  it('offers the condition discards only when the condition is held', () => {
+    const clean = buildGrantedActionOptions(gaGame(), gaMeta, RANCOR, gaDeps()).map((o) => o.key);
+    assert.ok(!clean.includes('stun') && !clean.includes('bleed'), clean.join());
+    const afflicted = buildGrantedActionOptions(gaGame(['Stun', 'Bleed']), gaMeta, RANCOR, gaDeps()).map((o) => o.key);
+    assert.ok(afflicted.includes('stun'), afflicted.join());
+    assert.ok(afflicted.includes('bleed'), afflicted.join());
+  });
+
+  it('inherits Stun blocking Move and Attack but not Interact or Specials', () => {
+    // destruct 2026-05-07. Inherited from the DC play area rather than re-derived.
+    const keys = buildGrantedActionOptions(gaGame(['Stun']), gaMeta, RANCOR, gaDeps()).map((o) => o.key);
+    assert.ok(!keys.includes('move') && !keys.includes('attack'), keys.join());
+    assert.ok(keys.includes('interact'), keys.join());
+    assert.ok(keys.some((k) => k.startsWith('special:')), keys.join());
+  });
+
+  it('withholds Special Actions from a Disabled figure', () => {
+    const g = gaGame();
+    g.disabledFigures = ['Rancor [Group 1]'];
+    const keys = buildGrantedActionOptions(g, gaMeta, RANCOR, gaDeps()).map((o) => o.key);
+    assert.ok(!keys.some((k) => k.startsWith('special:')), keys.join());
+    assert.ok(keys.includes('move'), 'Disable only blocks Special Actions');
+  });
+
+  it('every offered key maps back to a real DC button', () => {
+    const opts = buildGrantedActionOptions(gaGame(['Stun', 'Bleed']), gaMeta, RANCOR, gaDeps());
+    assert.ok(opts.length > 0);
+    for (const o of opts) {
+      const t = grantedActionCustomId(o.key, 'm-ga', 0);
+      assert.ok(t?.id && t?.buttonKey, `no re-dispatch target for ${o.key}`);
+      assert.equal(grantedActionKeyFor(t.id), o.key, `round-trip failed for ${o.key}`);
+    }
+  });
+});
+
+describe('a granted action costs the interrupting figure nothing', () => {
+  it('consumeActionForCurrentFigure is a no-op and never takes the activation lock', () => {
+    // Without this the interrupt would invent an action budget for a figure that
+    // is not activating AND steal game.activationLockKey from whoever is.
+    const granted = { selectedFigure: 0, grantedAction: true };
+    const game = {};
+    consumeActionForCurrentFigure(granted, 1, game, 'm-ga');
+    assert.equal(granted.perFigureRemaining, undefined, 'no budget invented or spent');
+    assert.equal(game.activationLockKey, undefined, 'the real activation keeps its lock');
+
+    // Control: an ordinary activating figure still spends normally.
+    const normal = { selectedFigure: 0 };
+    const game2 = {};
+    consumeActionForCurrentFigure(normal, 1, game2, 'm-real');
+    assert.equal(normal.perFigureRemaining[0], 1);
+    assert.equal(game2.activationLockKey, 'm-real_f0');
   });
 });

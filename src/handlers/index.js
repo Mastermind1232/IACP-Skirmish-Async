@@ -110,6 +110,7 @@ import {
   handleOrbitalBombardmentSpacePick,
   handleBombDropSpacePick,
 } from './dc-play-area.js';
+import { handleGrantedActionDo } from './granted-action.js';
 import { handleSoaPick, handleSoaFire, handleSoaSkipAll } from './soa-handler.js';
 import { handleEoaPick, handleEoaFire, handleEoaSkipAll } from './eoa-handler.js';
 import {
@@ -466,6 +467,7 @@ register('dc_end_figure_', handleDcEndFigure, 'dcPlayArea');
 register('dc_fig_pick_', handleDcFigPick, 'dcPlayArea');
 register('granted_attack_', handleGrantedAttack, 'dcPlayArea');
 register('jt_special_', handleJtSpecial, 'dcPlayArea');
+register('granted_do_', handleGrantedActionDo, 'dcPlayArea');
 register('granted_move_', handleGrantedMove, 'dcPlayArea');
 register('soa_pick_', handleSoaPick, 'dcPlayArea');
 register('soa_fire_', handleSoaFire, 'dcPlayArea');
