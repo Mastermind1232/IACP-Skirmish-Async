@@ -80,11 +80,11 @@ async function runPipeline(game, playerNum, cardName, extraOpts = {}) {
 // Each describe block covers one timing category from the spec. Tests verify
 // the gate opens in the correct game-state window and is closed in others.
 
-describe('Timing gate — start_of_round (Adrenaline, Deploy the Garrison)', () => {
+describe('Timing gate — start_of_round (Adrenaline, Deploy the Garrison!)', () => {
   it('opens during the SoR window (startOfRoundWhoseTurn truthy)', () => {
     const g = baseGame({ startOfRoundWhoseTurn: true });
     assert.equal(isCcPlayableNow(g, 1, 'Adrenaline'), true);
-    assert.equal(isCcPlayableNow(g, 1, 'Deploy the Garrison'), true);
+    assert.equal(isCcPlayableNow(g, 1, 'Deploy the Garrison!'), true);
   });
   it('blocked during activation — currentActivationTurnPlayerId set, no SoR flag', () => {
     const g = baseGame({ currentActivationTurnPlayerId: 'P1' });

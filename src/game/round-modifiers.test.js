@@ -448,7 +448,7 @@ test('Mandalorian Steel NORMAL: within-4 anchor = The Armorer (named figure)', (
     'within-4 anchor = The Armorer (named figure)');
 });
 
-test('Deploy the Garrison via Mara Fast Learner: within-4 anchored on MARA, not Director Krennic', () => {
+test('Deploy the Garrison! via Mara Fast Learner: within-4 anchored on MARA, not Director Krennic', () => {
   const game = integrationGame('g-dg-fl');
   // Director Krennic at m17 (dist 1 from the TROOPER m18); Mara at r17 (dist 7).
   game.figurePositions[1] = {
@@ -457,21 +457,21 @@ test('Deploy the Garrison via Mara Fast Learner: within-4 anchored on MARA, not 
     'Gar Saxon-1-0': 'm18',            // TROOPER: within 4 of Krennic, NOT of Mara
   };
   game.ccPlayedByFastLearnerFigureKey = 'Mara Jade-1-0';
-  const r = resolveAbility('Deploy the Garrison', { game, playerNum: 1, dcMessageMeta: new Map() });
+  const r = resolveAbility('Deploy the Garrison!', { game, playerNum: 1, dcMessageMeta: new Map() });
   delete game.ccPlayedByFastLearnerFigureKey;
   // Anchored on Mara → the only TROOPER is 7 away → none eligible.
   assert.ok(!(r.choiceValues || []).includes('Gar Saxon-1-0'),
     'TROOPER out of range of Mara is NOT eligible (anchored on Mara)');
 });
 
-test('Deploy the Garrison NORMAL: within-4 anchored on Director Krennic', () => {
+test('Deploy the Garrison! NORMAL: within-4 anchored on Director Krennic', () => {
   const game = integrationGame('g-dg-normal');
   game.figurePositions[1] = {
     'Mara Jade-1-0': 'r17',
     'Director Krennic-1-0': 'm17',
     'Gar Saxon-1-0': 'm18',
   };
-  const r = resolveAbility('Deploy the Garrison', { game, playerNum: 1, dcMessageMeta: new Map() });
+  const r = resolveAbility('Deploy the Garrison!', { game, playerNum: 1, dcMessageMeta: new Map() });
   assert.ok((r.choiceValues || []).includes('Gar Saxon-1-0'),
     'TROOPER within 4 of Krennic IS eligible (anchored on the named figure)');
 });

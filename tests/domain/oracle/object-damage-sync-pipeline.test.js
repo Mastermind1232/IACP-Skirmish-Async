@@ -1,6 +1,6 @@
 /**
  * applyObjectDamageSync — the sync object-damage entry point (alexanbv 2026-06-22).
- * Sync resolvers (Set the Charges, Collateral Damage, Durasteel Fist, IG-11
+ * Sync resolvers (Set the Charge, Collateral Damage, Durasteel Fist, IG-11
  * Self-Destruct, …) route object damage through it so HP, position removal and
  * vpOnDefeat are handled uniformly instead of hardcoded inline.
  */

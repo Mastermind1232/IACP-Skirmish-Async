@@ -26,7 +26,7 @@
     }
   },
   "lastCcEffectResult": {
-    "cardName": "Deploy the Garrison",
+    "cardName": "Deploy the Garrison!",
     "result": {
       "applied": true,
       "effects": [
@@ -34,7 +34,7 @@
           "effect": "deployGarrisonEffect"
         }
       ],
-      "log_message": "Deploy the Garrison \u2014 1 schema effect(s) applied."
+      "log_message": "Deploy the Garrison! \u2014 1 schema effect(s) applied."
     }
   },
   "p1CcDeck": [
@@ -43,7 +43,7 @@
     "Reserve C"
   ],
   "p1CcHand": [
-    "Deploy the Garrison"
+    "Deploy the Garrison!"
   ],
   "p2CcDeck": [
     "Reserve D",
@@ -51,8 +51,8 @@
     "Reserve F"
   ],
   "pendingCcFiredByCard": {
-    "Deploy the Garrison": {
-      "cardName": "Deploy the Garrison",
+    "Deploy the Garrison!": {
+      "cardName": "Deploy the Garrison!",
       "playerNum": 1,
       "round": 1
     }

@@ -105,8 +105,8 @@ describe('DC-CC batch-7: ccEffect library-shape contracts', () => {
     assert.equal(e.stealsFromOpponentDiscard, true);
   });
 
-  it('Deploy the Garrison — deployGarrisonEffect flag set', () => {
-    const e = entryOf('Deploy the Garrison');
+  it('Deploy the Garrison! — deployGarrisonEffect flag set', () => {
+    const e = entryOf('Deploy the Garrison!');
     assert.equal(e.type, 'ccEffect');
     assert.equal(e.wiredStatus, 'wired');
     assert.equal(e.deployGarrisonEffect, true);

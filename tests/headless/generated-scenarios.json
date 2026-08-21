@@ -1239,7 +1239,7 @@
       }
     },
     {
-      "ccName": "Deploy the Garrison",
+      "ccName": "Deploy the Garrison!",
       "scenarioType": "sor",
       "timing": "startOfRound",
       "requiredDc": "Director Krennic",
@@ -1252,7 +1252,7 @@
           "Darth Vader"
         ],
         "p1CcHand": [
-          "Deploy the Garrison"
+          "Deploy the Garrison!"
         ],
         "p2CcHand": []
       }
@@ -1714,7 +1714,7 @@
       }
     },
     {
-      "ccName": "Eyes on the Prize",
+      "ccName": "Eye on the Prize",
       "scenarioType": "sor",
       "timing": "startOfRound",
       "requiredDc": "4-LOM",
@@ -1727,7 +1727,7 @@
           "Darth Vader"
         ],
         "p1CcHand": [
-          "Eyes on the Prize"
+          "Eye on the Prize"
         ],
         "p2CcHand": []
       }
@@ -4469,7 +4469,7 @@
       }
     },
     {
-      "ccName": "Set the Charges",
+      "ccName": "Set the Charge",
       "scenarioType": "activation",
       "timing": "specialAction",
       "requiredDc": "Bodhi Rook",
@@ -4482,7 +4482,7 @@
           "Stormtrooper (Elite)"
         ],
         "p1CcHand": [
-          "Set the Charges"
+          "Set the Charge"
         ],
         "p2CcHand": []
       }

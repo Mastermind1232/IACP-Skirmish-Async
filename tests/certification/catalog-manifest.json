@@ -13971,10 +13971,10 @@
       },
       "failReasons": []
     },
-    "Deploy the Garrison": {
+    "Deploy the Garrison!": {
       "type": "cc",
       "category": "cc",
-      "name": "Deploy the Garrison",
+      "name": "Deploy the Garrison!",
       "level": "L4",
       "certified": true,
       "executionPath": "fallback",
@@ -15041,15 +15041,15 @@
       },
       "failReasons": []
     },
-    "Eyes on the Prize": {
+    "Eye on the Prize": {
       "type": "cc",
       "category": "cc",
-      "name": "Eyes on the Prize",
+      "name": "Eye on the Prize",
       "level": "L4",
       "certified": true,
       "executionPath": "fallback",
       "fallbackReason": "Timing 'startOfRound' is trigger/reactive — no action path exists",
-      "scenarioName": "fallback_startOfRound_Eyes_on_the_Prize",
+      "scenarioName": "fallback_startOfRound_Eye_on_the_Prize",
       "customIdUsed": null,
       "checks": {
         "L1_inventory": {
@@ -21185,15 +21185,15 @@
       },
       "failReasons": []
     },
-    "Set the Charges": {
+    "Set the Charge": {
       "type": "cc",
       "category": "cc",
-      "name": "Set the Charges",
+      "name": "Set the Charge",
       "level": "L4",
       "certified": true,
       "executionPath": "fallback",
       "fallbackReason": "No abilityId — timing 'specialAction' is trigger/reactive, manual resolution",
-      "scenarioName": "fallback_specialAction_Set_the_Charges",
+      "scenarioName": "fallback_specialAction_Set_the_Charge",
       "customIdUsed": null,
       "checks": {
         "L1_inventory": {

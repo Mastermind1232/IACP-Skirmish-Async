@@ -283,7 +283,7 @@ export async function applyAbilityResult(result, opts) {
   if (result.applied && result.refreshDcEmbed && result.logMessage) {
     const idsToNotify = [...new Set([...(result.refreshDcEmbedMsgIds || []), ...(msgId ? [msgId] : [])])];
     // Out-of-combat die rolls (Neurostim, Headbutt, Trample, Telekinetic Throw,
-    // Terminal Protocol, Set the Charges, Force cards, etc.) attach the rolled
+    // Terminal Protocol, Set the Charge, Force cards, etc.) attach the rolled
     // faces on result.rollImageDice so we can SHOW THE DIE FACE here, mirroring
     // combat. Render only ONCE (first notified thread); other threads get text.
     const _rollDice = Array.isArray(result.rollImageDice) && result.rollImageDice.length

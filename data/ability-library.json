@@ -664,7 +664,7 @@
       "dioxisFumesEffect": true,
       "wiredStatus": "wired"
     },
-    "Eyes on the Prize": {
+    "Eye on the Prize": {
       "type": "ccEffect",
       "label": "Each friendly figure carrying/controlling a crate or mission token: recover 1 Damage, gain 1 Power Token, or discard 1 HARMFUL condition",
       "eyesOnThePrize": true,
@@ -1275,7 +1275,7 @@
       "forceDefenderRerollOne": true,
       "logMessage": "**Demoralizing Monologue** — During this attack, the defender must reroll 1 die of your choice. Flag set — enforced automatically during this attack."
     },
-    "Deploy the Garrison": {
+    "Deploy the Garrison!": {
       "type": "ccEffect",
       "label": "Each TROOPER/GUARDIAN within 4 gains 2 MP or 1 Damage Token (your choice)",
       "deployGarrisonEffect": true,
@@ -4271,7 +4271,7 @@
       "attackResultReplaceWithStun": true,
       "wiredStatus": "wired"
     },
-    "Set the Charges": {
+    "Set the Charge": {
       "type": "ccEffect",
       "setTheChargesEffect": true,
       "label": "Roll blue die: open adjacent doors; Damage + Surge Damage to figures on/adjacent to chosen space",

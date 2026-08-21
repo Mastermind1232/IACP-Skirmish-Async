@@ -1830,10 +1830,10 @@ describe('Dengar — condition traces', () => {
   });
 });
 
-describe('Deploy the Garrison — condition traces', () => {
-  it('Deploy the Garrison p1: affects_self=TRUE → fires when owner is active', () => {
-    const cond = conditionForRow({ card: 'Deploy the Garrison', ability: 'Deploy the Garrison', part: '1', affects_self: 'TRUE', affects_others: 'each friendly TROOPER or GUARDIAN within 4', attack_side: 'None', conditional: '', limit: '' });
-    assert.ok(cond(G, { attackerDcName: 'Deploy the Garrison', attackerPlayerNum: 1 }), 'owner active → fires');
+describe('Deploy the Garrison! — condition traces', () => {
+  it('Deploy the Garrison! p1: affects_self=TRUE → fires when owner is active', () => {
+    const cond = conditionForRow({ card: 'Deploy the Garrison!', ability: 'Deploy the Garrison!', part: '1', affects_self: 'TRUE', affects_others: 'each friendly TROOPER or GUARDIAN within 4', attack_side: 'None', conditional: '', limit: '' });
+    assert.ok(cond(G, { attackerDcName: 'Deploy the Garrison!', attackerPlayerNum: 1 }), 'owner active → fires');
     assert.ok(!cond(G, { attackerDcName: 'Random Figure', attackerPlayerNum: 1 }), 'non-owner → blocked');
   });
 });
@@ -2420,9 +2420,9 @@ describe('Extra Protection — condition traces', () => {
   });
 });
 
-describe('Eyes on the Prize — condition traces', () => {
-  it('Eyes on the Prize p1: conditional guard — smoke only (no crash)', () => {
-    const row = { card: 'Eyes on the Prize', ability: 'Eyes on the Prize', part: '1', affects_self: 'TRUE', affects_others: 'each friendly figure carrying or controlling a crate or mission token', attack_side: 'None', conditional: '', limit: '' };
+describe('Eye on the Prize — condition traces', () => {
+  it('Eye on the Prize p1: conditional guard — smoke only (no crash)', () => {
+    const row = { card: 'Eye on the Prize', ability: 'Eye on the Prize', part: '1', affects_self: 'TRUE', affects_others: 'each friendly figure carrying or controlling a crate or mission token', attack_side: 'None', conditional: '', limit: '' };
     assert.doesNotThrow(() => conditionForRow(row)(G, {}));
   });
 });
@@ -6138,10 +6138,10 @@ describe('Set for Stun — condition traces', () => {
   });
 });
 
-describe('Set the Charges — condition traces', () => {
-  it('Set the Charges p1: affects_self=TRUE → fires when owner is active', () => {
-    const cond = conditionForRow({ card: 'Set the Charges', ability: 'Set the Charges', part: '1', affects_self: 'TRUE', affects_others: 'each figure or object on or adjacent to the chosen space', attack_side: 'None', conditional: '', limit: '' });
-    assert.ok(cond(G, { attackerDcName: 'Set the Charges', attackerPlayerNum: 1 }), 'owner active → fires');
+describe('Set the Charge — condition traces', () => {
+  it('Set the Charge p1: affects_self=TRUE → fires when owner is active', () => {
+    const cond = conditionForRow({ card: 'Set the Charge', ability: 'Set the Charge', part: '1', affects_self: 'TRUE', affects_others: 'each figure or object on or adjacent to the chosen space', attack_side: 'None', conditional: '', limit: '' });
+    assert.ok(cond(G, { attackerDcName: 'Set the Charge', attackerPlayerNum: 1 }), 'owner active → fires');
     assert.ok(!cond(G, { attackerDcName: 'Random Figure', attackerPlayerNum: 1 }), 'non-owner → blocked');
   });
 });

@@ -36,7 +36,7 @@ const BATCH = [
   ['Second Chance',          ['secondChanceEffect']],
   ['Self-Augmentation',      ['selfAugmentationEffect']],
   ['Set a Trap',             ['setATrapEffect']],
-  ['Set the Charges',        ['setTheChargesEffect']],
+  ['Set the Charge',        ['setTheChargesEffect']],
   ['Shadow Ops',             ['opponentCannotPlayCCsThisRound']],
   ['Shoot the Messenger',    ['opponentDiscardDeckTop']],
   ['Signal Jammer',          ['signalJammer']],

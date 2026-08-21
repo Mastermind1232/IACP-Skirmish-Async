@@ -27,7 +27,7 @@
     }
   },
   "lastCcEffectResult": {
-    "cardName": "Set the Charges",
+    "cardName": "Set the Charge",
     "result": {
       "applied": true,
       "note": "place charge marker \u2014 requires UI"
@@ -39,7 +39,7 @@
     "Reserve C"
   ],
   "p1CcHand": [
-    "Set the Charges"
+    "Set the Charge"
   ],
   "p2CcDeck": [
     "Reserve D",
@@ -47,8 +47,8 @@
     "Reserve F"
   ],
   "pendingCcFiredByCard": {
-    "Set the Charges": {
-      "cardName": "Set the Charges",
+    "Set the Charge": {
+      "cardName": "Set the Charge",
       "playerNum": 1,
       "round": 1
     }

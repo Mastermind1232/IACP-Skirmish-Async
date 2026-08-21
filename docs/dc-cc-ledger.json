@@ -1962,13 +1962,13 @@
     {
       "id": "CC-CC-EYES-ON-THE-PRIZE",
       "type": "ccEffect",
-      "abilityKey": "Eyes on the Prize",
+      "abilityKey": "Eye on the Prize",
       "label": "Each friendly figure carrying/controlling a crate or mission token: recover 1 Damage, gain 1 Power Token, or discard 1 HARMFUL condition",
       "description": null,
       "owners": [
         {
           "kind": "cc",
-          "name": "Eyes on the Prize"
+          "name": "Eye on the Prize"
         }
       ],
       "wiredSelfClaim": "wired",
@@ -1986,7 +1986,7 @@
         "testRefs": {},
         "riskTier": "medium"
       },
-      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js pins structured fields on abilities['Eyes on the Prize'].",
+      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js pins structured fields on abilities['Eye on the Prize'].",
       "evidence": {
         "files": [
           "data/ability-library.json",
@@ -1996,7 +1996,7 @@
           "tests/domain/oracle/dc-cc-library-wiring-batch-8-probe.test.js"
         ],
         "assertions": [
-          "abilities['Eyes on the Prize'] exists with type=ccEffect, wiredStatus=wired",
+          "abilities['Eye on the Prize'] exists with type=ccEffect, wiredStatus=wired",
           "field 'informational' present and non-null"
         ]
       },
@@ -3852,17 +3852,17 @@
     {
       "id": "CC-DEPLOY-THE-GARRISON",
       "type": "ccEffect",
-      "abilityKey": "Deploy the Garrison",
+      "abilityKey": "Deploy the Garrison!",
       "label": "Each TROOPER/GUARDIAN within 4 gains 2 MP or 1 Hit Token (your choice)",
       "description": null,
       "owners": [
         {
           "kind": "cc",
-          "name": "Deploy the Garrison"
+          "name": "Deploy the Garrison!"
         },
         {
           "kind": "cc",
-          "name": "Deploy the Garrison"
+          "name": "Deploy the Garrison!"
         }
       ],
       "wiredSelfClaim": "wired",
@@ -3878,7 +3878,7 @@
         "testRefs": {},
         "riskTier": "medium"
       },
-      "implHint": "Library-shape coverage in tests/domain/oracle/dc-cc-library-shape-batch-7-probe.test.js for Deploy the Garrison.",
+      "implHint": "Library-shape coverage in tests/domain/oracle/dc-cc-library-shape-batch-7-probe.test.js for Deploy the Garrison!.",
       "evidence": {
         "files": [
           "data/ability-library.json",
@@ -12781,13 +12781,13 @@
     {
       "id": "CC-SET-THE-CHARGES",
       "type": "ccEffect",
-      "abilityKey": "Set the Charges",
+      "abilityKey": "Set the Charge",
       "label": "Roll blue die: open adjacent doors; Hit+Surge Damage to figures on/adjacent to chosen space",
       "description": null,
       "owners": [
         {
           "kind": "cc",
-          "name": "Set the Charges"
+          "name": "Set the Charge"
         }
       ],
       "wiredSelfClaim": "wired",
@@ -12805,7 +12805,7 @@
         },
         "riskTier": "low"
       },
-      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-11-probe.test.js pins structured fields on abilities['Set the Charges'].",
+      "implHint": "Library-wiring coverage in tests/domain/oracle/dc-cc-library-wiring-batch-11-probe.test.js pins structured fields on abilities['Set the Charge'].",
       "evidence": {
         "files": [
           "data/ability-library.json",
@@ -12813,7 +12813,7 @@
           "tests/domain/oracle/dc-cc-library-wiring-batch-11-probe.test.js"
         ],
         "assertions": [
-          "abilities['Set the Charges'] exists with type=ccEffect, wiredStatus=wired",
+          "abilities['Set the Charge'] exists with type=ccEffect, wiredStatus=wired",
           "field 'setTheChargesEffect' present and non-null"
         ]
       },

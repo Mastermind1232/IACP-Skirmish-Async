@@ -641,7 +641,7 @@
     },
     {
       "id": "CC-CC-EYES-ON-THE-PRIZE",
-      "abilityKey": "Eyes on the Prize",
+      "abilityKey": "Eye on the Prize",
       "tier": "none",
       "strong": [],
       "medium": [],
@@ -1221,7 +1221,7 @@
     },
     {
       "id": "CC-DEPLOY-THE-GARRISON",
-      "abilityKey": "Deploy the Garrison",
+      "abilityKey": "Deploy the Garrison!",
       "tier": "none",
       "strong": [],
       "medium": [],
@@ -4530,7 +4530,7 @@
     },
     {
       "id": "CC-SET-THE-CHARGES",
-      "abilityKey": "Set the Charges",
+      "abilityKey": "Set the Charge",
       "tier": "none",
       "strong": [],
       "medium": [],

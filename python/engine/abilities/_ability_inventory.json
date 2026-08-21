@@ -786,7 +786,7 @@
       "type": "ccEffect",
       "wiredStatus": "wired"
     },
-    "Deploy the Garrison": {
+    "Deploy the Garrison!": {
       "category": null,
       "fields": [
         "deployGarrisonEffect"
@@ -2656,7 +2656,7 @@
       "type": "ccEffect",
       "wiredStatus": "wired"
     },
-    "Set the Charges": {
+    "Set the Charge": {
       "category": null,
       "fields": [
         "setTheChargesEffect"

@@ -401,7 +401,7 @@
       "stateChanged": false
     },
     {
-      "ccName": "Deploy the Garrison",
+      "ccName": "Deploy the Garrison!",
       "scenarioType": "sor",
       "status": "no-op",
       "stateChanged": false
@@ -551,7 +551,7 @@
       "stateChanged": false
     },
     {
-      "ccName": "Eyes on the Prize",
+      "ccName": "Eye on the Prize",
       "scenarioType": "sor",
       "status": "no-op",
       "stateChanged": false
@@ -1427,7 +1427,7 @@
       "error": "CC never became playable in this scenario"
     },
     {
-      "ccName": "Set the Charges",
+      "ccName": "Set the Charge",
       "scenarioType": "activation",
       "status": "not-reached",
       "error": "CC never became playable in this scenario"

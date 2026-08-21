@@ -9,12 +9,12 @@ import { resolveAbility } from './abilities.js';
 //   Leia Organa      -> FORCE USER, LEADER, SPY
 //   Mara Jade        -> FORCE USER, BRAWLER ; adaptive_skills + fast_learner
 //   Dengar           -> HUNTER (NOT a Force User) ; "Payback" is Dengar-restricted
-//   Director Krennic -> LEADER (NOT a Force User) ; "Deploy the Garrison" Krennic-restricted
+//   Director Krennic -> LEADER (NOT a Force User) ; "Deploy the Garrison!" Krennic-restricted
 //
 // Unique-figure CCs used:
 //   "Son of Skywalker"   -> Luke (FORCE USER)
 //   "Payback"            -> Dengar (NOT a Force User)
-//   "Deploy the Garrison"-> Director Krennic (NOT a Force User)
+//   "Deploy the Garrison!"-> Director Krennic (NOT a Force User)
 
 function baseGame() {
   return {

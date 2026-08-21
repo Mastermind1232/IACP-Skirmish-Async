@@ -28,7 +28,7 @@ function fixture() {
   };
 }
 
-describe('Eyes on the Prize — enumeration (carrying)', () => {
+describe('Eye on the Prize — enumeration (carrying)', () => {
   it('lists figures carrying a crate/contraband', () => {
     const figs = eyesOnThePrizeEligibleFigures(fixture(), 1, 'no-such-map');
     assert.deepEqual(figs, ['Jawa-1-0']);
@@ -40,10 +40,10 @@ describe('Eyes on the Prize — enumeration (carrying)', () => {
   });
 });
 
-describe('Eyes on the Prize — per-figure loop', () => {
+describe('Eye on the Prize — per-figure loop', () => {
   it('opens a 3-way (+skip) choice for the first eligible figure', () => {
     const game = fixture();
-    const r = resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
+    const r = resolveAbility('Eye on the Prize', { game, playerNum: 1 });
     assert.equal(r.requiresChoice, true);
     assert.deepEqual(r.choiceValues, ['recover', 'powertoken', 'condition', 'skip']);
     assert.equal(r.choiceOptions.length, 4);
@@ -52,8 +52,8 @@ describe('Eyes on the Prize — per-figure loop', () => {
 
   it('discards a HARMFUL condition when chosen, then finalizes', () => {
     const game = fixture();
-    resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
-    const done = resolveAbility('Eyes on the Prize', { game, playerNum: 1, chosenFigureKey: 'condition' });
+    resolveAbility('Eye on the Prize', { game, playerNum: 1 });
+    const done = resolveAbility('Eye on the Prize', { game, playerNum: 1, chosenFigureKey: 'condition' });
     assert.equal(done.applied, true);
     assert.ok(!(game.figureConditions['Jawa-1-0'] || []).includes('Bleed'), 'Bleed discarded');
     assert.ok(!game.pendingEyesOnThePrize, 'cursor cleared');
@@ -61,8 +61,8 @@ describe('Eyes on the Prize — per-figure loop', () => {
 
   it('grants a Block token outright, with no type choice', () => {
     const game = fixture();
-    resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
-    const done = resolveAbility('Eyes on the Prize', { game, playerNum: 1, chosenFigureKey: 'powertoken' });
+    resolveAbility('Eye on the Prize', { game, playerNum: 1 });
+    const done = resolveAbility('Eye on the Prize', { game, playerNum: 1, chosenFigureKey: 'powertoken' });
     assert.equal(done.applied, true);
     assert.equal(done.requiresPowerTokenChoice, undefined, 'the card prints Block, so no face is chosen');
     assert.equal(game.pendingPowerTokenGrant, undefined, 'no pending type picker');
@@ -71,7 +71,7 @@ describe('Eyes on the Prize — per-figure loop', () => {
 
   it('offers the Block token by name in the per-figure prompt', () => {
     const game = fixture();
-    const r = resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
+    const r = resolveAbility('Eye on the Prize', { game, playerNum: 1 });
     assert.ok(r.choiceOptions.some((o) => /Gain 1 Block Token/.test(o)),
       `expected a Block Token option, got ${JSON.stringify(r.choiceOptions)}`);
     assert.ok(!r.choiceOptions.some((o) => /Power Token/.test(o)),
@@ -80,8 +80,8 @@ describe('Eyes on the Prize — per-figure loop', () => {
 
   it('skip applies nothing', () => {
     const game = fixture();
-    resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
-    const done = resolveAbility('Eyes on the Prize', { game, playerNum: 1, chosenFigureKey: 'skip' });
+    resolveAbility('Eye on the Prize', { game, playerNum: 1 });
+    const done = resolveAbility('Eye on the Prize', { game, playerNum: 1, chosenFigureKey: 'skip' });
     assert.equal(done.applied, true);
     assert.deepEqual(game.figureConditions['Jawa-1-0'], ['Bleed'], 'condition untouched');
     assert.equal(game.pendingPowerTokenGrant, undefined);
@@ -90,7 +90,7 @@ describe('Eyes on the Prize — per-figure loop', () => {
   it('reports when no figure qualifies', () => {
     const game = fixture();
     game.figureContraband = {};
-    const r = resolveAbility('Eyes on the Prize', { game, playerNum: 1 });
+    const r = resolveAbility('Eye on the Prize', { game, playerNum: 1 });
     assert.equal(r.applied, true);
     assert.match(r.logMessage, /no friendly figures/);
   });

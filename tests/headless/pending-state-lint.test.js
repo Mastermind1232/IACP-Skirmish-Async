@@ -96,7 +96,7 @@ const ALLOWED_EXCEPTIONS = new Set([
   'pendingAdaptBlaise',         // blaise-adapt: Adapt (Blaise) prompt
   'pendingBarteredInfoFocused', // abilities: Bartered Information focus pick
   'pendingForbiddenKnowledge',  // abilities: Forbidden Knowledge prompt
-  'pendingEyesOnThePrize',      // abilities: Eyes on the Prize prompt
+  'pendingEyesOnThePrize',      // abilities: Eye on the Prize prompt
   'pendingKuilTokenSplitState', // abilities: Kuiil token-split prompt
 
   // Movement / map reactive prompts — set + consumed in their move/map flow

@@ -5052,7 +5052,7 @@ export function resolveAbility(abilityId, context) {
     return { applied: false, requiresChoice: true, choiceOptions: [...remaining, FK_DONE] };
   }
 
-  // ccEffect: eyesOnThePrize (Eyes on the Prize, Scum) — at the start of a round,
+  // ccEffect: eyesOnThePrize (Eye on the Prize, Scum) — at the start of a round,
   // each friendly figure carrying or controlling a crate or mission token may
   // recover 1 Damage, gain 1 Power Token, or discard 1 HARMFUL condition.
   // Per-figure via the requiresChoice loop; Power Token grants are accumulated
@@ -5066,14 +5066,14 @@ export function resolveAbility(abilityId, context) {
     if (chosenFigureKey == null && !game.pendingEyesOnThePrize) {
       const figs = mapId ? eyesOnThePrizeEligibleFigures(game, playerNum, mapId) : [];
       if (figs.length === 0) {
-        return { applied: true, logMessage: '**Eyes on the Prize** — no friendly figures are carrying or controlling a crate or mission token.' };
+        return { applied: true, logMessage: '**Eye on the Prize** — no friendly figures are carrying or controlling a crate or mission token.' };
       }
       game.pendingEyesOnThePrize = { playerNum, figures: figs, idx: 0, ptGrants: [] };
       return _eyesPromptForFigure(figs[0]);
     }
 
     const st = game.pendingEyesOnThePrize;
-    if (!st) return { applied: true, logMessage: '**Eyes on the Prize** — resolved.' };
+    if (!st) return { applied: true, logMessage: '**Eye on the Prize** — resolved.' };
     // Apply the chosen action to the current figure (chosenFigureKey = action code).
     const action = chosenFigureKey;
     const fk = st.figures[st.idx];
@@ -5102,7 +5102,7 @@ export function resolveAbility(abilityId, context) {
     if (grants.length > 0) {
       return { applied: true, refreshDcEmbed: true, logMessage: `**Eye on the Prize** — resolved; ${grants.length} figure${grants.length === 1 ? '' : 's'} gained a Block Token.` };
     }
-    return { applied: true, refreshDcEmbed: true, logMessage: '**Eyes on the Prize** — resolved.' };
+    return { applied: true, refreshDcEmbed: true, logMessage: '**Eye on the Prize** — resolved.' };
   }
 
   // ccEffect: +N MP from Speed (Urgency: Speed+2) — requires active activation
@@ -11925,7 +11925,7 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: `**${entry.label}** —${freeNote}${rangeNote}${dieNote} Use the Attack button.` };
   }
 
-  // ccEffect: deployGarrisonEffect (Deploy the Garrison) — at start of
+  // ccEffect: deployGarrisonEffect (Deploy the Garrison!) — at start of
   // a round, each friendly TROOPER or GUARDIAN within 4 spaces makes a
   // PER-FIGURE choice between gaining 1 Hit Token or moving up to 2
   // spaces. Order is player-chosen; each figure resolves before the
@@ -11940,7 +11940,7 @@ export function resolveAbility(abilityId, context) {
     // resolveRoundModifierAnchor handles activation → named-figure → Mara, and
     // honors the Fast-Learner-played-by-Mara override (alexanbv 2026-06-21) so
     // the within-4 range references the figure that ACTUALLY played the card.
-    const anchorFk = resolveRoundModifierAnchor(game, playerNum, cardName || 'Deploy the Garrison', { dcMessageMeta });
+    const anchorFk = resolveRoundModifierAnchor(game, playerNum, cardName || 'Deploy the Garrison!', { dcMessageMeta });
     let anchorPos = anchorFk ? game.figurePositions?.[playerNum]?.[anchorFk] : null;
     if (!anchorPos) {
       // No anchor resolvable → fall back to first friendly position.
@@ -11964,7 +11964,7 @@ export function resolveAbility(abilityId, context) {
       allQualifyingFigures.push({ figureKey: fk, dcName: dcN });
     }
     if (allQualifyingFigures.length === 0) {
-      return { applied: true, logMessage: `**Deploy the Garrison** — No friendly TROOPER / GUARDIAN figures within 4 spaces.` };
+      return { applied: true, logMessage: `**Deploy the Garrison!** — No friendly TROOPER / GUARDIAN figures within 4 spaces.` };
     }
     // Initialize / read pending-resolved set so each figure resolves once.
     if (!game.pendingDeployGarrison) {
@@ -11973,7 +11973,7 @@ export function resolveAbility(abilityId, context) {
     const remaining = allQualifyingFigures.filter(f => !game.pendingDeployGarrison.resolved.includes(f.figureKey));
     if (remaining.length === 0) {
       delete game.pendingDeployGarrison;
-      return { applied: true, logMessage: `**Deploy the Garrison** — All eligible figures resolved.` };
+      return { applied: true, logMessage: `**Deploy the Garrison!** — All eligible figures resolved.` };
     }
     // Each figure-pick click sends back chosenFigureKey of form
     // "<figKey>|<choice>" (choice = "token" or "move") so this single
@@ -12010,7 +12010,7 @@ export function resolveAbility(abilityId, context) {
           delete game.pendingDeployGarrison;
           return {
             applied: true,
-            logMessage: `**Deploy the Garrison** — **${dcN}** gained 1 Damage Token. All eligible figures resolved.`,
+            logMessage: `**Deploy the Garrison!** — **${dcN}** gained 1 Damage Token. All eligible figures resolved.`,
           };
         }
         return {
@@ -12018,17 +12018,17 @@ export function resolveAbility(abilityId, context) {
           requiresChoice: true,
           choiceOptions: stillRemaining.map(f => `Resolve next: ${f.dcName}`),
           choiceValues: stillRemaining.map(f => f.figureKey),
-          logMessage: `**Deploy the Garrison** — **${dcN}** gained 1 Damage Token. ${stillRemaining.length} figure(s) remaining.`,
+          logMessage: `**Deploy the Garrison!** — **${dcN}** gained 1 Damage Token. ${stillRemaining.length} figure(s) remaining.`,
         };
       }
       // Move sub-choice → setupPendingMoveX picker (no bank).
       if (!figMsgId) {
-        return { applied: true, logMessage: `**Deploy the Garrison** — could not locate **${dcN}**'s play area; resolve their 2 MP move manually.` };
+        return { applied: true, logMessage: `**Deploy the Garrison!** — could not locate **${dcN}**'s play area; resolve their 2 MP move manually.` };
       }
       game.pendingMoveX = game.pendingMoveX || {};
       game.pendingMoveX[figMsgId] = {
         remaining: 2,
-        source: 'Deploy the Garrison',
+        source: 'Deploy the Garrison!',
         playerNum,
         figureKey: figKey,
         dcName: dcN,
@@ -12043,7 +12043,7 @@ export function resolveAbility(abilityId, context) {
           applied: true,
           pendingMoveXMsgId: figMsgId,
           activeMsgId: figMsgId,
-          logMessage: `**Deploy the Garrison** — **${dcN}** moves up to 2 spaces (spend at once, no bank). All eligible figures resolved.`,
+          logMessage: `**Deploy the Garrison!** — **${dcN}** moves up to 2 spaces (spend at once, no bank). All eligible figures resolved.`,
         };
       }
       // Both: post the picker AND chain to the next figure-pick.
@@ -12057,7 +12057,7 @@ export function resolveAbility(abilityId, context) {
         requiresChoice: true,
         choiceOptions: stillRemaining.map(f => `Resolve next: ${f.dcName}`),
         choiceValues: stillRemaining.map(f => f.figureKey),
-        logMessage: `**Deploy the Garrison** — **${dcN}** moves up to 2 spaces (spend at once, no bank). ${stillRemaining.length} figure(s) remaining.`,
+        logMessage: `**Deploy the Garrison!** — **${dcN}** moves up to 2 spaces (spend at once, no bank). ${stillRemaining.length} figure(s) remaining.`,
       };
     }
     // Phase 1: present figure-order picker (player chooses next figure to resolve).
@@ -12066,7 +12066,7 @@ export function resolveAbility(abilityId, context) {
       requiresChoice: true,
       choiceOptions: remaining.map(f => `Resolve next: ${f.dcName}`),
       choiceValues: remaining.map(f => f.figureKey),
-      manualMessage: `**Deploy the Garrison** — Resolve each TROOPER/GUARDIAN within 4 spaces in order; each chooses 1 Hit Token or 2-space move.`,
+      manualMessage: `**Deploy the Garrison!** — Resolve each TROOPER/GUARDIAN within 4 spaces in order; each chooses 1 Hit Token or 2-space move.`,
     };
   }
 
@@ -13269,7 +13269,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: setTheChargesEffect (Set the Charges) — pick a space within 3; roll blue die; apply Hit+Surge as damage; open doors
+  // ccEffect: setTheChargesEffect (Set the Charge) — pick a space within 3; roll blue die; apply Hit+Surge as damage; open doors
   if (entry.type === 'ccEffect' && entry.setTheChargesEffect) {
     const { game, playerNum, dcMessageMeta, dcHealthState, chosenSpace } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
@@ -13326,16 +13326,16 @@ export function resolveAbility(abilityId, context) {
         }
       }
       const noFigures = hitsFromDie === 0 ? '0 Hits+Surges — no damage.' : results.length ? results.join('; ') : 'No figures or objects in area.';
-      return { applied: true, logMessage: `**Set the Charges** — Space **${String(chosenSpace).toUpperCase()}**, rolled blue die: **${dieLabel}** (${hitsFromDie} dmg). ${noFigures} Open adjacent unlocked doors manually.`, refreshDcEmbed: results.length > 0, ...(rolled ? { rollImageDice: [rolled] } : {}), ...(_stcObjDamaged ? { refreshBoard: true } : {}) };
+      return { applied: true, logMessage: `**Set the Charge** — Space **${String(chosenSpace).toUpperCase()}**, rolled blue die: **${dieLabel}** (${hitsFromDie} dmg). ${noFigures} Open adjacent unlocked doors manually.`, refreshDcEmbed: results.length > 0, ...(rolled ? { rollImageDice: [rolled] } : {}), ...(_stcObjDamaged ? { refreshBoard: true } : {}) };
     }
     // Phase 1: space picker within 3 of activating figure
     const boardState = getBoardStateForMovement(game, null);
-    if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Resolve Set the Charges manually.' };
+    if (!boardState?.mapSpaces) return { applied: false, manualMessage: 'Resolve Set the Charge manually.' };
     const msgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     const meta = msgId ? dcMessageMeta?.get(msgId) : null;
     const actKeys = meta ? getFigureKeysForDcMsg(game, playerNum, meta) : [];
     const actPos = actKeys.length ? game.figurePositions?.[playerNum]?.[actKeys[0]] : null;
-    if (!actPos) return { applied: false, manualMessage: 'Resolve Set the Charges manually (no position).' };
+    if (!actPos) return { applied: false, manualMessage: 'Resolve Set the Charge manually (no position).' };
     // CSV (docs/combat-spec.csv:816): "Choose a space within 3 spaces". "Within 3"
     // is a RANGE measure (countGameSpaces), not movement reachability — difficult
     // terrain must not shrink the set, and figures ON a space don't disqualify it
@@ -13351,8 +13351,8 @@ export function resolveAbility(abilityId, context) {
       validSet.add(spNorm);
     }
     const validSpaces = [...validSet];
-    if (!validSpaces.length) return { applied: false, manualMessage: 'Resolve Set the Charges manually (no spaces in range).' };
-    return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Set the Charges** — Choose a space within 3:' };
+    if (!validSpaces.length) return { applied: false, manualMessage: 'Resolve Set the Charge manually (no spaces in range).' };
+    return { requiresSpaceChoice: true, validSpaces, spaceChoiceLabel: '**Set the Charge** — Choose a space within 3:' };
   }
 
   // ccEffect: faceMeEffect (Face Me!) — pick a unique hostile; push them to a space adjacent to you; grant free melee attack
@@ -13776,18 +13776,38 @@ export function resolveAbility(abilityId, context) {
   // ccEffect: supportSpecialistEffect (Support Specialist) — CSV: "Choose a friendly
   // DROID, TECHNICIAN, or TROOPER within 3 spaces. That figure interrupts to perform
   // an ACTION." The chosen figure may interrupt to MOVE or ATTACK (the two
-  // engine-actionable interrupts). The action is encoded in the choice value as
-  // `<figureKey>|move` or `<figureKey>|attack`. A Special Action interrupt is not
-  // generally available via a free-action grant, so it is NOT offered here.
+  // engine-actionable interrupts). A Special Action interrupt is not generally
+  // available via a free-action grant, so it is NOT offered here.
   // alexanbv 2026-06-20.
+  //
+  // TWO menus, not one (alexanbv 2026-08-21: "There needs to be a menu to choose
+  // which figure is being selected and then another menu for which action that
+  // figure is doing"). It used to be a single flat list that crossed every figure
+  // with every action, which grows as figures x actions and reads badly once a
+  // few troopers are in range.
+  //   Phase 1: no chosenFigureKey            -> one entry per eligible figure
+  //   Phase 2: chosenFigureKey is a bare key -> that figure's action menu
+  //   Phase 3: chosenFigureKey is `fk|action`-> grant the interrupt
   if (entry.type === 'ccEffect' && entry.supportSpecialistEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: entry.label || 'Resolve manually.' };
-    // Phase 2: chosen `<figureKey>|<action>` → grant the interrupt action.
+    // Phase 2: a bare figure key → open that figure's action menu.
+    if (chosenFigureKey && chosenFigureKey.lastIndexOf('|') < 0) {
+      const _fk = chosenFigureKey;
+      const _dcN = dcNameFromFigureKey(_fk) || _fk;
+      return {
+        applied: false,
+        requiresChoice: true,
+        choicePrompt: `**Support Specialist** — what does **${_dcN}** interrupt to do?`,
+        choiceOptions: [`Move: ${_dcN}`, `Attack: ${_dcN}`],
+        choiceValues: [`${_fk}|move`, `${_fk}|attack`],
+      };
+    }
+    // Phase 3: `<figureKey>|<action>` → grant the interrupt action.
     if (chosenFigureKey) {
       const _sep = chosenFigureKey.lastIndexOf('|');
-      const fk = _sep >= 0 ? chosenFigureKey.slice(0, _sep) : chosenFigureKey;
-      const action = _sep >= 0 ? chosenFigureKey.slice(_sep + 1) : 'move';
+      const fk = chosenFigureKey.slice(0, _sep);
+      const action = chosenFigureKey.slice(_sep + 1);
       const figMsgId = findMsgIdForFigureKey(game, playerNum, fk, dcMessageMeta);
       if (!figMsgId) return { applied: false, manualMessage: 'Could not find figure DC — apply action manually.' };
       const dcName = dcNameFromFigureKey(fk);
@@ -13815,12 +13835,16 @@ export function resolveAbility(abilityId, context) {
       const eff = dcEffects[dcN] || {};
       const kws = (eff.keywords || []).map((k) => String(k).toUpperCase());
       if (kws.includes('DROID') || kws.includes('TECHNICIAN') || kws.includes('TROOPER')) {
-        choiceOptions.push(`Interrupt move: ${dcN}`); choiceValues.push(`${fk}|move`);
-        choiceOptions.push(`Interrupt attack: ${dcN}`); choiceValues.push(`${fk}|attack`);
+        choiceOptions.push(dcN); choiceValues.push(fk);
       }
     }
     if (!choiceValues.length) return { applied: false, manualMessage: 'No DROID/TECHNICIAN/TROOPER friendlies within 3 spaces.' };
-    return { requiresChoice: true, choiceOptions, choiceValues };
+    return {
+      requiresChoice: true,
+      choicePrompt: '**Support Specialist** — which friendly figure interrupts?',
+      choiceOptions,
+      choiceValues,
+    };
   }
 
   // ccEffect: fieldTacticianEffect (Field Tactician) — choose any friendly within 2; grant them free move
@@ -16708,7 +16732,7 @@ function findMsgIdForFigureKey(game, playerNum, figureKey, dcMessageMeta) {
   return null;
 }
 
-/** Eyes on the Prize: build the per-figure 3-way (+ skip) requiresChoice result. */
+/** Eye on the Prize: build the per-figure 3-way (+ skip) requiresChoice result. */
 function _eyesPromptForFigure(figureKey) {
   const name = dcNameFromFigureKey(figureKey) || figureKey;
   return {

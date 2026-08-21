@@ -27,7 +27,7 @@
     }
   },
   "lastCcEffectResult": {
-    "cardName": "Eyes on the Prize",
+    "cardName": "Eye on the Prize",
     "result": {
       "applied": true,
       "note": "informational \u2014 resolve per-figure manually"
@@ -39,7 +39,7 @@
     "Reserve C"
   ],
   "p1CcHand": [
-    "Eyes on the Prize"
+    "Eye on the Prize"
   ],
   "p2CcDeck": [
     "Reserve D",
@@ -47,8 +47,8 @@
     "Reserve F"
   ],
   "pendingCcFiredByCard": {
-    "Eyes on the Prize": {
-      "cardName": "Eyes on the Prize",
+    "Eye on the Prize": {
+      "cardName": "Eye on the Prize",
       "playerNum": 1,
       "round": 1
     }

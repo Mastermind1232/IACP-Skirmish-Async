@@ -118,7 +118,7 @@ timing against `data/cc-effects.json` / `data/dc-effects.json`.
 | Disengage | 11.0 Playtest (Season 11) | matches |
 | Double or Nothing | 8.0 Playtest (Season 8) | matches |
 | Elusive | IACP Approved | matches |
-| Eye on the Prize | 12.0 Playtest (Season 12) | **NAME DRIFT + TOKEN DRIFT.** See below. Body text otherwise matches. |
+| Eye on the Prize | 12.0 Playtest (Season 12) | **NAME DRIFT + TOKEN DRIFT, both FIXED 2026-08-21.** Renamed to the printed singular; the token is a Block token. Body text otherwise matches. |
 | Face Me! | IACP Season 5 | matches, including the Special Action icon |
 | Feint | IACP Season 5 | matches |
 | Field Promotion | IACP Approved | matches, cost 0 |
@@ -173,36 +173,6 @@ Correct as printed, no change: Apex Predator, Battle Scars, Final Stand, Price
 of Glory (all print the "?" badge) and Guerilla Warfare (prints Block and
 already granted Block).
 
-### Open: Eye on the Prize is stored under the wrong name
-
-The card prints **"Eye on the Prize"**, singular. The codebase stores
-**"Eyes on the Prize"** in every place: the `cc-effects.json` key and
-`abilityId`, `ability-library.json`, the python parity snapshot,
-`catalog-manifest.json`, `dc-cc-ledger.json`, `board-helpers.js`,
-`abilities.js`, and several oracle and headless fixtures. Both images in the
-module are the same 12.0 Playtest card, and one of them is filed correctly as
-`Eye on the Prize.png`.
-
-Unlike Deploy the Garrison this is a different word rather than punctuation, and
-it is the name a player reads on the card. Raised with alexanbv 2026-08-21;
-awaiting his call before the rename.
-
-| Iron Will | IACP Approved | matches |
-| Just Business | 8.0 Playtest (Season 8) | matches, including the Scum affiliation icon |
-| Karabast! | IACP Approved | matches |
-| Lightbow | IACP Approved | matches, all three bullet abilities |
-| Overwhelming Impact | Rebalanced | matches |
-| Paid in Beskar | 11.0 Playtest (Season 11) | matches; prints the Block face and we store Block |
-| Personal Energy Shield | IACP Approved | matches; prints the Evade face and we store Evade |
-| Preservation Protocol | IACP Approved | matches |
-| Rapid Recalibration | IACP Season 5 | matches |
-| Reactive Loyalties | IACP Season 5.1 | matches, all three affiliation branches |
-| Reduce to Rubble | IACP Approved | matches |
-| Rest in Peace | IACP Season 5 | matches; the card carries no trait band, so `playableBy: "Any Figure"` is right |
-| Retaliation | IACP Approved | matches; prints the Hit face and we store Hit Tokens |
-| Reverse Engineer | IACP Approved | **DRIFT, FIXED 2026-08-21.** The card reads "you may use **[Surge]** abilities on the defender's Deployment card". Our stored text dropped the Surge qualifier, which reads as every ability. Behaviour was already right: `combat.js:247` swaps only the surge-ability source. Corrected in `cc-effects.json`, `combat-spec.csv` and the snapshot. |
-| Savage Vigor | IACP Approved | matches |
-
 ### Absences that are not gaps
 
 - **No Cheating** has an image in `vassal_extracted/images/cc/` but no entry in
@@ -213,13 +183,13 @@ awaiting his call before the rename.
   A missing `abilityId` is not evidence of a missing implementation.
 
 | Self-Augmentation | 11.0 Playtest (Season 11) | matches (our `Attachment:` label is our own convention) |
-| Set the Charge | 8.0 Playtest (Season 8) | body matches. **NAME DRIFT:** the card is "Set the **Charge**", singular; we store "Set the Charges". See the naming section. |
+| Set the Charge | 8.0 Playtest (Season 8) | body matches. **NAME DRIFT, FIXED 2026-08-21.** The card is "Set the **Charge**", singular. Renamed to match print. |
 | Smoke Grenade | (blank footer, IACP mark) | **THREE DRIFTS, FIXED 2026-08-21.** See below. |
 | Sniper Configuration | IACP Approved | matches |
 | Static Pulse | IACP Season 5 | matches |
 | Still Faster Than You | IACP Approved | matches |
 | Supercharge | IACP Approved | matches |
-| Support Specialist | 8.0 Playtest (Season 8) | body matches. **OPEN QUESTION:** the card prints the Special Action arrow but our entry carries `timing: "duringActivation"`, so it is offered from hand rather than from the DC's Special Action button. See below. |
+| Support Specialist | 8.0 Playtest (Season 8) | body matches. **FIXED 2026-08-21.** Retagged `specialAction` so it comes off the DC button, and its picker is now two menus (figure, then action) per alexanbv. |
 
 ### Smoke Grenade held the superseded card (fixed 2026-08-21)
 
@@ -249,47 +219,57 @@ confirmed non-vacuous by reintroducing each defect. The flag key
 the ledger and the wiring probes; the range now lives in the data and the
 comment says so.
 
-### Open: two more printed names we do not match
+### Naming: match the printed card (RESOLVED 2026-08-21)
 
-Same shape as Deploy the Garrison, but a different word rather than punctuation,
-so these are the name a player reads on the card:
+alexanbv, asked to rule on the class rather than card by card: **"match printed
+cards"**. Applied to all three known mismatches, including Deploy the Garrison,
+whose exclamation mark I had earlier decided to drop:
 
-| printed | stored | where the stored name lives |
-|---|---|---|
-| Eye on the Prize | Eyes on the Prize | ~20 files; one of the two images is filed correctly as `Eye on the Prize.png` |
-| Set the Charge | Set the Charges | ~25 files, image filename included |
+| was stored | now, as printed |
+|---|---|
+| Eyes on the Prize | **Eye on the Prize** |
+| Set the Charges | **Set the Charge** |
+| Deploy the Garrison | **Deploy the Garrison!** |
 
-Both are internally consistent, so nothing is broken; the rename is mechanical
-and touches data keys, oracle snapshots, the catalog manifest and the ledger.
-Raised with alexanbv 2026-08-21, awaiting a single ruling for the class.
+Matching print is also the more consistent answer: Face Me!, Karabast!, Draw! and
+Utinni! already keep their exclamation marks in our data, so Garrison was the
+outlier.
 
-### Open: Support Specialist is not tagged as a Special Action
+The rename covers the `cc-effects.json` keys and `abilityId`s,
+`ability-library.json`, `destruct-test-decks.json`, `unique-figure-ccs.json`,
+`scripts/cc-names.js`, the resolvers and helpers in `src/`, the oracle, headless
+and certification fixtures, `dc-cc-ledger.json`, `port_coverage.json`,
+`combat-spec.csv`, the regenerated ability-text snapshot, the python port and its
+parity snapshots, and the card image filenames (`getCommandCardImagePath`
+resolves by filename, so the images had to move too). The redundant low-resolution
+`Eye on the Prize.png` was replaced by the high-resolution file that had been
+misfiled under the plural name.
 
-The card prints the Special Action arrow, but the entry carries
-`timing: "duringActivation"` rather than `"specialAction"`. In this engine that
-distinction is the play path: `SPECIAL_ACTION_TIMING` in `cc-timing.js` routes
-`specialAction` and `doubleActionSpecial` to the DC's Special Action button and
-withholds them from hand. 65 CCs use `specialAction` and 7 use
-`doubleActionSpecial`; Support Specialist is one of only two that print the arrow
-and use a different timing. The value traces back to
-`scripts/seed-cc-unverified-first-pass.js`, whose seeded text had no "Special
-Action:" prefix, so it looks like seed drift rather than a decision. Not changed:
-moving a card's play path is a behavioural change and warrants a ruling.
+Deliberately **not** renamed, because they are dated historical records rather
+than live data: `docs/dc-cc-timing-audit-*.md`, the one-shot migration scripts
+under `scripts/` (`seed-cc-unverified-first-pass.js`,
+`add-missing-cc-abilities.js`, `dc-cc-ledger-patch-batch-*.js`), and the
+`tests/headless/learnings-*.json` training artifacts, which no code path reads.
 
-### Naming decision: Deploy the Garrison (RESOLVED 2026-08-21)
+### Special Action tagging (RESOLVED 2026-08-21)
 
-The printed card title is `Deploy the Garrison!` with a trailing exclamation mark.
-alexanbv: "Pick one name for deploy the garrison and stick with it."
+alexanbv: "Support specialist is a special action. Should be the same as any
+other special action... There needs to be a menu to choose which figure is being
+selected and then another menu for which action that figure is doing."
 
-**Canonical name: `Deploy the Garrison`, with no exclamation mark.** The codebase
-already uses that spelling everywhere with no competing variant: the
-`data/cc-effects.json` key and `abilityId`, `data/ability-library.json`,
-`data/destruct-test-decks.json`, `scripts/cc-names.js`, `tests/certification/catalog-manifest.json`,
-the python parity snapshot, and the image file `vassal_extracted/images/cc/Deploy the Garrison.png`.
-Adopting the printed spelling would require renaming the image file alongside every
-data key and derived artifact, for a punctuation mark that changes no behaviour, so
-the existing spelling is the one being kept. The trailing "!" on the card art is a
-known cosmetic difference and is not drift.
+Two cards printed the single Special Action arrow but carried
+`timing: "duringActivation"`, which in this engine means "played from hand"
+rather than from the DC's Special Action button: **Support Specialist** and
+**Smuggler's Tricks**. Both retagged `specialAction`.
+
+Support Specialist's picker was also rebuilt as two menus. It used to be one flat
+list crossing every eligible figure with every action, which grows as figures x
+actions; it is now figure first, then that figure's action. Guarded by
+`tests/domain/oracle/cc-support-specialist-menus.test.js`.
+
+The seven cards on `doubleActionSpecial` (Cloned Reinforcements, Coordinated
+Attack, Flurry of Blades, Maximum Firepower, New Orders, Optimal Bombardment,
+Pummel) print the double arrow and are correctly distinct.
 
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
@@ -298,7 +278,8 @@ Stimulants, Wookiee Rage.
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and
-Charge/Charges names (open), and Support Specialist's play path (open).
+Charge/Charges names (resolved: match print), and the Special Action tagging on
+Support Specialist and Smuggler's Tricks (resolved).
 
 alexanbv 2026-08-19: "Remember most cards are IACP cards" — so there is no
 meaningful non-IACP subset to skip. Sweep everything.
@@ -312,8 +293,9 @@ false positives. Compare meaning, not bytes.
 ### Name-resolution artifacts, not gaps
 
 - `Definition Love.png` is the card stored as `Definition: 'Love'`.
-- `Eye on the Prize.png` and `Eyes on the Prize.png` are both present; the card is
-  `Eyes on the Prize`.
+- `Eye on the Prize.png` and `Eyes on the Prize.png` used to both be present and
+  were the same 12.0 Playtest card at two resolutions. Resolved 2026-08-21: the
+  card is `Eye on the Prize`, and the high-resolution file now carries that name.
 
 Filename-to-card-name matching is noisy. Confirm against `cc-effects.json` keys
 before reporting any card as missing from data.
@@ -322,20 +304,24 @@ before reporting any card as missing from data.
 
 Never checked. Highest value targets.
 
-All in a Day's Work, Ambush, Apex Predator, Beatdown, Blend In, Built on Hope,
-Cal's Buddy, Choose a Side, Cloned Reinforcements, Close and Personal, Dangerous
-Prey, De Wanna Wanga, Definition Love, Demoralizing Monologue, Deploy the
-Garrison, Desperate Escape, Dioxis Fumes, Disarm, Disengage, Double or Nothing,
-Elusive, Eye on the Prize, Eyes on the Prize, Face Me!, Feint, Field Promotion,
-Final Stand, Findsman Meditation, Forbidden Knowledge, Force Drain, Gauntlet
-Blade, Get Behind Me!, Guerilla Warfare, Guild Programming, Honoring the Fallen,
-Iron Will, Just Business, Karabast!, Lightbow, Mandalorian Steel, No Cheating,
-Overwhelming Impact, Paid in Beskar, Personal Energy Shield, Preservation
+Struck through as they are cleared. Remaining, in sweep order:
+
+There Is No Try, Transmit the Plans, Whistling Birds, Windfall.
+
+Cleared so far from this list: All in a Day's Work, Ambush, Apex Predator,
+Beatdown, Blend In, Built on Hope, Cal's Buddy, Choose a Side, Cloned
+Reinforcements, Close and Personal, Dangerous Prey, De Wanna Wanga, Definition
+Love, Demoralizing Monologue, Deploy the Garrison!, Desperate Escape, Dioxis
+Fumes, Disarm, Disengage, Double or Nothing, Elusive, Eye on the Prize, Face Me!,
+Feint, Field Promotion, Final Stand, Findsman Meditation, Forbidden Knowledge,
+Force Drain, Gauntlet Blade, Get Behind Me!, Guerilla Warfare, Guild Programming,
+Honoring the Fallen, Iron Will, Just Business, Karabast!, Lightbow, Mandalorian
+Steel, Overwhelming Impact, Paid in Beskar, Personal Energy Shield, Preservation
 Protocol, Rapid Recalibration, Reactive Loyalties, Reduce to Rubble, Rest in
 Peace, Retaliation, Reverse Engineer, Savage Vigor, Self-Augmentation, Set the
-Charges, Smoke Grenade, Sniper Configuration, Static Pulse, Still Faster Than
-You, Stimulants, Supercharge, Support Specialist, There Is No Try, Transmit the
-Plans, Whistling Birds, Windfall, Wookiee Rage
+Charge, Smoke Grenade, Sniper Configuration, Static Pulse, Still Faster Than You,
+Stimulants, Supercharge, Support Specialist, Wookiee Rage. No Cheating is not in
+the data at all and correctly so (see above).
 
 ## Reproducing the CC detection
 

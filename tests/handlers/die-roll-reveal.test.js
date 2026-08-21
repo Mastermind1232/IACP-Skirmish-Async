@@ -2,7 +2,7 @@
 // (src/discord/dice-renderer.js): formatDieFaces + postDieRollResult.
 //
 // Out-of-combat abilities that roll a die (Dr. Hemlock/Neurostim, Tauntaun
-// Headbutt, Trample, Telekinetic Throw, Terminal Protocol, Set the Charges,
+// Headbutt, Trample, Telekinetic Throw, Terminal Protocol, Set the Charge,
 // Force cards, IG-11 Self-Destruct, Last Resort, Fighting Knife, Indiscriminate
 // Fire, etc.) now SHOW THE ROLLED DIE FACE in the activation/combat thread the
 // same way combat does. postDieRollResult renders the face image and posts it,

@@ -157,7 +157,7 @@ export function isFigureAdjacentOrOnMissionToken(game, playerNum, figureKey, map
 }
 
 /**
- * Eyes on the Prize (Scum CC): the friendly figureKeys eligible for the
+ * Eye on the Prize (Scum CC): the friendly figureKeys eligible for the
  * per-figure benefit — those carrying or controlling a crate or mission token.
  *   - carrying: the figure holds a crate/contraband token (game.figureContraband)
  *   - controlling: the figure is on or adjacent to a crate token (game.crateTokens)

@@ -261,7 +261,7 @@ export const LEGACY_COLLECTION_INTERRUPTS = Object.freeze([
   { field: 'pendingClaimedKryknaQueue',   shape: 'array',  message: 'a Claimed Krykna prompt is open' },
   { field: 'pendingCombatResupply',       shape: 'map',    message: 'a Combat Resupply pick is open' },
   { field: 'pendingDcAbilityChoice',      shape: 'map',    message: 'a DC ability choice is open' },
-  { field: 'pendingDeployGarrison',       shape: 'map',    message: 'a Deploy the Garrison space pick is open' },
+  { field: 'pendingDeployGarrison',       shape: 'map',    message: 'a Deploy the Garrison! space pick is open' },
   { field: 'pendingDeployOrientation',    shape: 'map',    message: 'a deploy-orientation pick is open' },
   { field: 'pendingDoorSelections',       shape: 'map',    message: 'a door selection is open' },
   { field: 'pendingEndTurn',              shape: 'map',    message: 'an end-turn confirmation is open' },

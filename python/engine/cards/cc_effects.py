@@ -36,7 +36,7 @@ _CC_EFFECTS: Dict[str, Callable[[Any, Dict[str, Any], Dict[str, Any]], Dict[str,
 _CC_HANDLER_APPLIES_MP_BONUS = frozenset({
     'Adrenaline', 'Advance Warning', 'Ambush', 'Apex Predator',
     "Break 'Em", 'Close the Gap', 'Desperate Escape', 'Disengage',
-    'Dying Lunge', 'Eyes on the Prize', 'Face to Face', 'Fleet Footed',
+    'Dying Lunge', 'Eye on the Prize', 'Face to Face', 'Fleet Footed',
     'Force Jump', 'Force Surge', 'Heart of Freedom', 'Long Strides',
     'Mobility', 'On the Lam', 'Overdrive', 'Rank and File', 'Sprint',
     'Strategic Shift', 'Still Faster Than You', 'Utinni!',
@@ -3407,7 +3407,7 @@ _CC_REAL_CARDS_SIMPLE = [
     ('Deathblow', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusHits', 1)),
     ('Deflection', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'bonusAccuracy', -2)),
     ('Demoralizing Monologue', lambda g, p, c: _cc_generic_combat_bonus(g, p, c, 'defenderRerollCount', 1)),
-    ('Deploy the Garrison', lambda g, p, c: {'applied': True}),  # radius buff
+    ('Deploy the Garrison!', lambda g, p, c: {'applied': True}),  # radius buff
     ('Desperate Escape', lambda g, p, c: _cc_generic_mp(g, p, c, 6)),
     ('Devotion', lambda g, p, c: {'applied': True}),  # deck search
     ('Disorient', lambda g, p, c: {'applied': True}),  # beneficial-condition removal
@@ -3426,11 +3426,11 @@ _CC_REAL_CARDS_SIMPLE = [
     ('Escalating Hostility', lambda g, p, c: _cc_generic_damage(g, p, c, 1)),
     ('Etiquette and Protocol', lambda g, p, c: _cc_generic_condition(g, p, c, 'Stun')),
     ('Evacuate', lambda g, p, c: {'applied': True}),  # self-defeat for half-VP
-    # Eyes on the Prize — informational: "Each friendly figure
+    # Eye on the Prize — informational: "Each friendly figure
     # carrying/controlling a crate/mission token may recover 1 Damage
     # OR gain 1 Power Token OR discard 1 HARMFUL condition". Resolved
     # manually per figure in JS. No bulk auto-MP.
-    ('Eyes on the Prize', lambda g, p, c: {'applied': True,
+    ('Eye on the Prize', lambda g, p, c: {'applied': True,
         'note': 'informational — resolve per-figure manually'}),
     ('Face Me!', lambda g, p, c: {'applied': True}),  # push
     ('Fatal Deception', lambda g, p, c: {'applied': True}),  # false-orders variant
@@ -3501,7 +3501,7 @@ _CC_REAL_CARDS_SIMPLE = [
     ('Savage Vigor', lambda g, p, c: _cc_savage_vigor(g, p, c)),
     ('Self-Augmentation', lambda g, p, c: _cc_self_augmentation(g, p, c)),
     ('Set a Trap', lambda g, p, c: _cc_set_a_trap(g, p, c)),
-    ('Set the Charges', lambda g, p, c: {'applied': True, 'note': 'place charge marker — requires UI'}),
+    ('Set the Charge', lambda g, p, c: {'applied': True, 'note': 'place charge marker — requires UI'}),
     ('Shared Experience', lambda g, p, c: _cc_shared_experience(g, p, c)),
     ('Signal Jammer', lambda g, p, c: _cc_signal_jammer(g, p, c)),
     ('Single Purpose', lambda g, p, c: _cc_single_purpose(g, p, c)),

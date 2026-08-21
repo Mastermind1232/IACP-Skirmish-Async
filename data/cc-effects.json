@@ -468,12 +468,12 @@
       "effect": "Use while attacking to choose and reroll 1 defense die. Then you may reveal your hand. If you reveal 2 or more cards this way, remove the chosen die's results from the defense results.",
       "abilityId": "Demoralizing Monologue"
     },
-    "Deploy the Garrison": {
+    "Deploy the Garrison!": {
       "cost": 1,
       "playableBy": "Director Krennic",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Each friendly TROOPER or GUARDIAN within 4 spaces gains 2 movement points or 1 Hit Token.",
-      "abilityId": "Deploy the Garrison"
+      "abilityId": "Deploy the Garrison!"
     },
     "Desperate Escape": {
       "cost": 1,
@@ -648,12 +648,12 @@
       "effect": "Use when another friendly figure within 2 spaces suffers 3 or more Damage. Move up to 2 spaces, then perform an attack.",
       "abilityId": "Extra Protection"
     },
-    "Eyes on the Prize": {
+    "Eye on the Prize": {
       "cost": 1,
       "playableBy": "SCUM",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if your affiliation is Scum. Each friendly figure that is carrying or controlling a crate or mission token may either recover 1 Damage, or gain 1 Block Token, or discard 1 HARMFUL condition.",
-      "abilityId": "Eyes on the Prize"
+      "abilityId": "Eye on the Prize"
     },
     "Face Me!": {
       "cost": 1,
@@ -1667,7 +1667,7 @@
       "effect": "Special Action: Perform an attack. If the target would suffer 1 or more Damage, reduce the Damage suffered to 0. Then, the target becomes Stunned.",
       "abilityId": "Set for Stun"
     },
-    "Set the Charges": {
+    "Set the Charge": {
       "cost": 2,
       "playableBy": "TECHNICIAN",
       "timing": "specialAction",
@@ -1723,7 +1723,7 @@
     "Smuggler's Tricks": {
       "cost": 1,
       "playableBy": "SMUGGLER",
-      "timing": "duringActivation",
+      "timing": "specialAction",
       "effect": "Special Action: Choose a tile or token you are on or adjacent to. Until the start of the next round, your opponent counts as having 1 fewer figure on or adjacent to that tile or token.",
       "abilityId": "Smuggler's Tricks"
     },
@@ -1823,7 +1823,7 @@
     "Support Specialist": {
       "cost": 2,
       "playableBy": "Del Meeko",
-      "timing": "duringActivation",
+      "timing": "specialAction",
       "effect": "Special Action: Choose a friendly DROID, TECHNICIAN, or TROOPER within 3 spaces. That figure interrupts to perform an action."
     },
     "Survival Instincts": {
