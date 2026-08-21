@@ -39,7 +39,7 @@
       "cost": 1,
       "playableBy": "Cara Dune",
       "timing": "whenAttackDeclaredOnYou",
-      "effect": "Use when an attack targeting you is declared. If you share an edge or corner with a space containing blocking, impassable, or difficult terrain, interrupt to move 4 spaces to a space adjacent to the attacker, then the attacker suffers 2 Damage.",
+      "effect": "Use when an attack targeting you is declared. If you share an edge or corner with a space containing blocking, impassable, or difficult terrain, interrupt to move up to 4 spaces to a space adjacent to the attacker, then the attacker suffers 2 Damage.",
       "abilityId": "Ambush"
     },
     "Apex Predator": {

@@ -95,7 +95,7 @@ timing against `data/cc-effects.json` / `data/dc-effects.json`.
 | Capitalize | 10.1 Playtest | text matches; our data adds a `Passive (Discard Pile):` label the card does not print. Verify the redraw really is discard-pile-only. |
 | Close the Gap | 10.0 Playtest | matches |
 | All in a Day's Work | IACP Approved | matches |
-| Ambush | IACP Approved | **TEXT DRIFT.** Card prints "move **up to** 4 spaces"; our `effect` says "move 4 spaces". Confirmed at 6x zoom, not a low-res misread. Behaviour is correct: it grants `pendingMoveX` with `remaining: 4` and the picker has a Done button that ends the move early (`handleMoveXDone`), so "up to" already holds. Stored text only. |
+| Ambush | IACP Approved | **DRIFT, FIXED 2026-08-21.** Card prints "move **up to** 4 spaces"; our stored text said "move 4 spaces". alexanbv confirmed: "Ambush is up to 4 spaces". Corrected in `data/cc-effects.json`, `docs/combat-spec.csv` and the regenerated `docs/ability-text-snapshot.json`. Behaviour never needed a change: the resolver grants `pendingMoveX` and already logs "Move up to N spaces" (`abilities.js:8983`), and the picker's Done button ends the move early. |
 | Apex Predator | IACP Season 5.1 | matches |
 | Beatdown | (footer unclear) | matches |
 | Blend In | IACP Season 5.1 | matches |
@@ -110,9 +110,24 @@ timing against `data/cc-effects.json` / `data/dc-effects.json`.
 | Close and Personal | IACP Approved | matches |
 | De Wanna Wanga | IACP Approved | matches, both the Special Action and the once-per-round passive |
 | Demoralizing Monologue | IACP Approved | matches |
-| Deploy the Garrison | IACP Season 5 | matches. Card title prints with a trailing "!" that our data key omits; internally consistent, noted only so it is not later mistaken for a missing card |
+| Deploy the Garrison | IACP Season 5 | matches. See the naming decision below. |
 | Desperate Escape | IACP Approved | matches, both the end-of-round move and the Kuiil-defeated passive |
 | Disarm | IACP Approved | matches |
+
+### Naming decision: Deploy the Garrison (RESOLVED 2026-08-21)
+
+The printed card title is `Deploy the Garrison!` with a trailing exclamation mark.
+alexanbv: "Pick one name for deploy the garrison and stick with it."
+
+**Canonical name: `Deploy the Garrison`, with no exclamation mark.** The codebase
+already uses that spelling everywhere with no competing variant: the
+`data/cc-effects.json` key and `abilityId`, `data/ability-library.json`,
+`data/destruct-test-decks.json`, `scripts/cc-names.js`, `tests/certification/catalog-manifest.json`,
+the python parity snapshot, and the image file `vassal_extracted/images/cc/Deploy the Garrison.png`.
+Adopting the printed spelling would require renaming the image file alongside every
+data key and derived artifact, for a punctuation mark that changes no behaviour, so
+the existing spelling is the one being kept. The trailing "!" on the card art is a
+known cosmetic difference and is not drift.
 
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
