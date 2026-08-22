@@ -6829,9 +6829,31 @@ export function resolveAbility(abilityId, context) {
   // Excluded: conditionalFocusIfDamagedGte entries (e.g. Furious Charge) — handled in their own block below
   if ((abilityId === 'Focus' || (entry.type === 'ccEffect' && entry.applyFocus)) && !entry.conditionalFocusIfDamagedGte) {
     const { game, playerNum, dcMessageMeta } = context;
+    const cardNameForLog = context.cardName || abilityId;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
-    const msgId = context.msgId ?? findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no activation in progress. Play during your activation.' };
+    // anchorOnNamedFigure: for a unique-figure CC whose "you" is the NAMED figure
+    // and whose timing fires OUTSIDE that figure's activation. Debts Repaid is
+    // the case: "Use when a friendly figure is defeated. Ready YOUR Deployment
+    // card and become Focused" — a friendly usually dies on the OPPONENT's turn,
+    // so keying off the active activation both (a) failed outright with "no
+    // activation in progress" in the card's most common window and (b) Focused
+    // and readied whichever OTHER group happened to be activating. Same defect
+    // Blaze of Glory had (alexanbv 2026-08-12); same fix, and it inherits
+    // Mara/Fast Learner awareness from resolveUniqueFigureCcFigureKey.
+    // Audit 2026-08-22. Debts Repaid is the ONLY applyFocus card with an
+    // out-of-activation timing, so this flag stays opt-in.
+    const _afNamedMsgId = entry.anchorOnNamedFigure
+      ? findOwnDcMsgIdForCc(game, playerNum, abilityId, dcMessageMeta)
+      : null;
+    const msgId = _afNamedMsgId ?? context.msgId ?? findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+    if (!msgId) {
+      return {
+        applied: false,
+        manualMessage: entry.anchorOnNamedFigure
+          ? `Resolve manually: the figure named on **${cardNameForLog || 'this card'}** is not in play.`
+          : 'Resolve manually: no activation in progress. Play during your activation.',
+      };
+    }
     const meta = dcMessageMeta.get(msgId);
     if (!meta) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);

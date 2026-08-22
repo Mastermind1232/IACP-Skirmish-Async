@@ -297,6 +297,39 @@ Shrewd Scoundrel interaction is delicate, so this needs alexanbv first.
 | Deathblow | (LFL/FFG) | matches |
 | Blaze of Glory (Mara) | n/a | confirmed Mara-aware with IG-88 also in the list; see the tests noted below |
 
+| Debts Repaid | (LFL/FFG) | **LIVE BUG, FIXED 2026-08-22.** See below. |
+| Devotion | (LFL/FFG) | matches |
+| Dirty Trick | (LFL/FFG) | matches |
+| Disorient | (LFL/FFG) | matches. Its config uses the `chooseAdjacentHostileThen` key but sets `range: 999`, so there is no adjacency restriction — correct, the card does not impose one. The key name is a misnomer here; it is shared, so left alone. |
+
+### Debts Repaid anchored on the wrong figure (fixed 2026-08-22)
+
+Card: "Use when a friendly figure is defeated. Ready YOUR Deployment card and
+become Focused." Chewbacca, cost 3.
+
+The resolver keyed off `findActiveActivationMsgId`. But a friendly figure usually
+dies on the OPPONENT's turn, so Chewbacca is very often not the activating
+figure, and often nothing is activating at all:
+
+| situation | was | now |
+|---|---|---|
+| nobody activating (the card's most common window) | bailed with "no activation in progress" — the card did nothing and the 3 cost was wasted | readies Chewbacca and Focuses him |
+| another friendly group activating | Focused and readied **that group** instead | Chewbacca |
+| Chewbacca activating | correct, by luck | Chewbacca |
+
+Identical to the Blaze of Glory defect alexanbv caught on 2026-08-12, and fixed
+the same way: an opt-in `anchorOnNamedFigure` flag routes the lookup through
+`findOwnDcMsgIdForCc`, which resolves the named figure and inherits Mara /
+Fast Learner awareness for free.
+
+The flag is opt-in because the resolver block is shared with every other
+`applyFocus` card. Debts Repaid is the **only** one with an out-of-activation
+timing — the rest are duringActivation, specialAction or attack-declaration
+timings where the activating figure genuinely is "you" — so nothing else changes.
+A test pins that a plain Focus still follows the activating figure.
+
+Guarded by `tests/domain/oracle/cc-debts-repaid-anchor.test.js`.
+
 ### Stale library labels are worth fixing
 
 `entry.label` is not dead metadata: it surfaces to players in manual-resolve
@@ -416,7 +449,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**115 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**119 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and

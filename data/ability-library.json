@@ -1180,10 +1180,11 @@
     },
     "Debts Repaid": {
       "type": "ccEffect",
-      "label": "Become Focused + Ready active Deployment card",
+      "label": "Chewbacca becomes Focused and readies HIS OWN Deployment card",
       "applyFocus": true,
       "wiredStatus": "wired",
-      "readyActiveDc": true
+      "readyActiveDc": true,
+      "anchorOnNamedFigure": true
     },
     "defensible_sc2m": {
       "type": "dcSpecial",
