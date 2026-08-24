@@ -397,6 +397,39 @@ above, which is what it actually needed.)
 
 Guarded by `tests/domain/oracle/cc-debts-repaid-anchor.test.js`.
 
+| Droid Mastery | (LFL/FFG) | matches |
+| Dying Lunge | (LFL/FFG) | matches |
+| Eerie Visage | (LFL/FFG) | matches; verified `targetAll` really does hit every hostile with line of sight rather than prompting for one |
+| Efficient Travel | (LFL/FFG) | matches |
+| Element of Surprise | (LFL/FFG) | matches |
+| Emergency Aid | (LFL/FFG) | matches |
+| Endless Reserves | (LFL/FFG) | matches |
+| Escalating Hostility | (LFL/FFG) | matches |
+| Self-Defense | (LFL/FFG) | text matches. **LIVE BUG, FIXED 2026-08-24** — see below. |
+
+### Reaction cards had no way to name their own figure (fixed 2026-08-24)
+
+Found sweeping for the "declared figure" bug class. Three unrestricted,
+hand-played cards refer to a FIGURE rather than the player: Dying Lunge, To the
+Limit and Self-Defense. Having no restriction box, the declaration step has
+nothing to offer them, so they fell back on "whoever is activating".
+
+To the Limit is fine — it says "during your activation", so the activating figure
+genuinely is "you".
+
+**Self-Defense was broken in its only real window.** "Use when a hostile figure
+enters a space adjacent to you" fires during the OPPONENT's move, when no
+activation of yours exists, so it bailed with "no activation in progress".
+
+The information was always present: the move-interrupt opportunity records which
+of your figures the hostile moved next to (`triggerFigureKey`). Slippery Target
+had been special-cased to read it (alexanbv 2026-06-19). Rather than special-case
+a second resolver, `cc-hand` now sets the declaration from the live opportunity
+for ANY interrupt card, so the generic resolution picks it up — Parting Blow and
+Dirty Trick included, and anything added to `INTERRUPT_CARD_BY_TYPE` later.
+
+Guarded by `tests/domain/oracle/cc-interrupt-window-declaration.test.js`.
+
 ### Stale library labels are worth fixing
 
 `entry.label` is not dead metadata: it surfaces to players in manual-resolve
@@ -516,7 +549,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**119 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**128 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and

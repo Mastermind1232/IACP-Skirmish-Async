@@ -58,7 +58,7 @@ import { discordCatch } from '../error-handling.js';
 import { parseCustomId } from '../discord/custom-id.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 
-const INTERRUPT_CARD_BY_TYPE = {
+export const INTERRUPT_CARD_BY_TYPE = {
   PB: 'Parting Blow',
   DT: 'Dirty Trick',
   SD: 'Self-Defense',

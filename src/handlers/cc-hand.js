@@ -73,6 +73,7 @@ import { refreshHandAndDiscard } from '../engine/message-updaters.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
 import { chunkButtonsToRows, buildRowPickerButtons, cleanupSpacePick } from '../discord/components.js';
 import { awardObjectiveVp } from '../game/index.js';
+import { INTERRUPT_CARD_BY_TYPE } from './move-interrupts-handler.js';
 
 /**
  * Unified "a CC was played" trigger subroutine (alexanbv 2026-06-14): fires
@@ -737,7 +738,29 @@ export async function handleCcConfirmPlay(interaction, ctx) {
   // above (skipSignalJammer:true). Validation (hand, timing, restriction) was
   // already done above (skipValidation:true). Log uses interaction user mention
   // so skipLog:true and onPostCommit posts it. A New Hope deplete also in callback.
+  // Reaction cards played out of a move-interrupt window declare themselves: the
+  // opportunity already records WHICH of your figures the hostile moved next to
+  // (triggerFigureKey). Without this, an unrestricted reaction like Self-Defense
+  // has no restriction box to pick a figure from, so it fell back on "whoever is
+  // activating" — and during the opponent's move that is nobody, so the card
+  // bailed with "no activation in progress" in the only window it is playable.
+  // Slippery Target had been special-cased for this in its own resolver
+  // (alexanbv 2026-06-19); doing it here covers every interrupt card instead.
+  const _interruptAnchorFk = (() => {
+    if (_pickedFigureKey) return null;
+    const p = game.pendingMoveInterrupts;
+    if (!p?.opportunities?.length) return null;
+    const _matches = (o) => o
+      && o.triggerPlayerNum === playerNum
+      && String(INTERRUPT_CARD_BY_TYPE[o.type] || '').toLowerCase() === String(card).toLowerCase();
+    const cur = p.opportunities[p.opIndex];
+    if (_matches(cur)) return cur.triggerFigureKey || null;
+    const found = p.opportunities.find(_matches);
+    return found?.triggerFigureKey || null;
+  })();
+
   const _anchorFk = _pickedFigureKey
+    ?? _interruptAnchorFk
     ?? ((restriction.fastLearner) ? resolveFastLearnerFigureKey(game, playerNum) : null);
   await playCcFull(game, gameId, playerNum, _anchorFk, card, {
     skipValidation: true,
