@@ -119,6 +119,7 @@ export async function handleFastLearnerPickMara(interaction, ctx) {
 const _KIND_LABEL = {
   named: '',
   anchor: '',
+  restriction: '',
   fast_learner: ' (Fast Learner)',
   there_is_another: ' (There is Another)',
   a_new_hope: ' (A New Hope)',
@@ -153,7 +154,7 @@ export async function presentUniqueCcPlayerPicker(interaction, game, playerNum, 
   const buttons = options.slice(0, 24).map((o, i) => new ButtonBuilder()
     .setCustomId(`cc_uccp_${i}_${gameId}`)
     .setLabel(`${(o.displayName || _displayForFigureKey(o.figureKey)).slice(0, 60)}${_KIND_LABEL[o.kind] || ''}`.slice(0, 80))
-    .setStyle(o.kind === 'named' ? ButtonStyle.Primary : ButtonStyle.Secondary));
+    .setStyle((o.kind === 'named' || o.kind === 'restriction') ? ButtonStyle.Primary : ButtonStyle.Secondary));
 
   await interaction.deferUpdate().catch(discordCatch);
   // alexanbv 2026-06-23: keep message (no delete) for traceability

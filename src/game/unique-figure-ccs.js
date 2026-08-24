@@ -16,7 +16,7 @@ import { dirname, join } from 'node:path';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
 import { getDcEffects, getCcEffect } from '../data-loader.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
-import { aNewHopeAvailable, figureMatchesCcRestriction } from './cc-timing.js';
+import { aNewHopeAvailable, figureMatchesCcRestriction, hasDarksaberImperial, _getProgrammingOverrideKeywords } from './cc-timing.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -375,7 +375,12 @@ export function fallenMasterWaivesFactionFor(game, playerNum, figureKey) {
  * @returns {Array<{figureKey, dcName, displayName, kind, consume}>}
  */
 export function getCcPlayerOptions(game, playerNum, cardName, opts = {}) {
-  const { getExtraKeywords = null, hasDarksaberFor = null } = opts;
+  // Defaults wired to the real helpers so callers cannot forget them and
+  // silently lose Programming Override's granted keywords or the Darksaber.
+  const {
+    getExtraKeywords = _getProgrammingOverrideKeywords,
+    hasDarksaberFor = hasDarksaberImperial,
+  } = opts;
   const playableBy = String(getCcEffect(cardName)?.playableBy || '').trim();
   const liveKeys = _liveFigureKeys(game, playerNum);
   if (liveKeys.length === 0) return [];

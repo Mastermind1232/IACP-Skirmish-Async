@@ -174,7 +174,7 @@ import { hasLineOfSight, hasLineOfSightByCoord } from './spatial.js';
 import { getFigureSize, getDcStats } from '../data-loader.js';
 import { getDamageableObjectsAtCoord, getDamageableObjectsWithinN, isObjectAlive, applyObjectDamageSync } from './object-damage-pipeline.js';
 import { checkDeckDiscardPassiveRedraws, fireCcDiscarded } from './cc-passive-redraw.js';
-import { getUniqueFiguresForCc } from './unique-figure-ccs.js';
+import { getUniqueFiguresForCc, getCcPlayerOptions } from './unique-figure-ccs.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID, firstSeenArmyAffiliation } from './adaptive-skills-helpers.js';
 
 /**
@@ -5851,6 +5851,48 @@ export function resolveAbility(abilityId, context) {
       && !entry.chooseAdjacentHostileThen) {
     const { game, playerNum, dcMessageMeta, cardName, choiceIndex, chosenFigureKey } = context;
     if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: play during your activation.' };
+
+    // DECLARED FIGURE WINS (alexanbv 2026-08-24). The play path now settles which
+    // figure is playing the card before the negate/comms window, so honour that
+    // instead of guessing from the activation. This covers all three cases
+    // alexanbv listed for Opportunistic in one place:
+    //   activating figure plays          -> MP banked
+    //   non-activating friendly plays     -> spend immediately
+    //   plays during the opponent's turn  -> spend immediately
+    // The bank-vs-immediate rule is his 2026-07-13 one: MP banks only for a
+    // figure that is actually activating.
+    const _mpDeclaredFk = game.ccPlayedByFigureKey
+      && game.figurePositions?.[playerNum]?.[game.ccPlayedByFigureKey]
+      ? game.ccPlayedByFigureKey : null;
+    if (_mpDeclaredFk && !entry.isMoveX && !entry.trooperMpBonusRound) {
+      const _mpDeclMsgId = findMsgIdForFigureKey(game, playerNum, _mpDeclaredFk, dcMessageMeta);
+      if (_mpDeclMsgId) {
+        const _mpN = entry.mpBonus;
+        const _mpActiveMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
+        const _mpName = dcNameFromFigureKey(_mpDeclaredFk);
+        if (_mpActiveMsgId && _mpActiveMsgId === _mpDeclMsgId) {
+          addMovementPoints(game, _mpDeclMsgId, _mpN);
+          return { applied: true, refreshMovementBank: true, activeMsgId: _mpDeclMsgId,
+            logMessage: `**${entry.label || cardName || 'Move'}** — **${_mpName}** gained **${_mpN} MP** (banked — figure is activating).` };
+        }
+        game.pendingMoveX = game.pendingMoveX || {};
+        game.pendingMoveX[_mpDeclMsgId] = {
+          remaining: _mpN,
+          source: cardName || entry.label || 'Command card',
+          playerNum,
+          figureKey: _mpDeclaredFk,
+          dcName: _mpName,
+          threadId: null,
+          bypassCosts: false,
+          allowAbilitySpend: true,
+          msgId: _mpDeclMsgId,
+          nextAction: null,
+        };
+        return { applied: true, pendingMoveXMsgId: _mpDeclMsgId, refreshDcEmbedMsgIds: [_mpDeclMsgId], activeMsgId: _mpDeclMsgId,
+          logMessage: `**${entry.label || cardName || 'Move'}** — **${_mpName}** gained **${_mpN} MP** (must be spent immediately — not activating).` };
+      }
+    }
+
     const msgId = context.msgId ?? findActiveActivationMsgId(game, playerNum, dcMessageMeta);
     // Opportunistic (C66): playable outside activation when a hostile suffers damage.
     // Phase 1: show DC picker. Phase 2 (choiceIndex set): grant MP to chosen DC.
@@ -5891,19 +5933,17 @@ export function resolveAbility(abilityId, context) {
           }
           return { applied: true, logMessage: `Gained **${n} MP** (outside activation — spend on the chosen figure immediately).` };
         }
-        // Phase 1: enumerate friendly figures for choice
-        const dcMsgIds = getDcMessageIds(game, playerNum) || [];
-        const dcListOpp = getDcList(game, playerNum) || [];
+        // Phase 1: enumerate friendly figures for choice. alexanbv 2026-08-24:
+        // "Only figures who can legally play the card should be offered." This
+        // used to list EVERY friendly Deployment card, so a Rebel Trooper was
+        // offered as the player of a SCUM card. getCcPlayerOptions is the same
+        // legality answer the declaration step uses.
+        const _oppLegal = getCcPlayerOptions(game, playerNum, cardName);
         const choiceOptions = [];
         const choiceValues = [];
-        for (let i = 0; i < dcMsgIds.length; i++) {
-          const dcObj = dcListOpp[i];
-          if (!dcObj || dcObj.defeated) continue;
-          const dcN = typeof dcObj === 'object' ? (dcObj.dcName || dcObj.displayName) : dcObj;
-          const fks = getFigureKeysForDcMsg(game, playerNum, dcMessageMeta.get(dcMsgIds[i]));
-          if (fks.length === 0) continue;
-          choiceOptions.push(dcN);
-          choiceValues.push(fks[0]); // Use first figure key as identifier
+        for (const o of _oppLegal) {
+          choiceOptions.push(o.displayName || o.dcName);
+          choiceValues.push(o.figureKey);
         }
         if (choiceOptions.length === 0) {
           return { applied: true, logMessage: `Gained **${n} MP** but no friendly figures available to move.` };

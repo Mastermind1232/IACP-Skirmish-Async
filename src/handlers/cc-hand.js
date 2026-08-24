@@ -577,22 +577,37 @@ export async function handleCcConfirmPlay(interaction, ctx) {
     _pickedConsume = _flResolved.consume ?? null;
   }
   if (!_flResolved) {
-    const { getUniqueCcPlayerOptions } = await import('../game/unique-figure-ccs.js');
-    const options = getUniqueCcPlayerOptions(game, playerNum, card);
-    // Prompt when there is genuine choice: >1 distinct eligible figure, OR a
-    // single non-named option whose consumption differs from playing as the
-    // named figure (so the player can decline a Fast Learner / A New Hope spend).
+    // DECLARATION STEP (alexanbv 2026-08-24). "For any CC that is played by a
+    // figure, the first thing that must be determined is which figure is playing
+    // it. Any CC with a restriction box is a CC played by a figure... the player
+    // playing the CC must declare which figure is playing the CC BEFORE opponent
+    // decides whether or not to negate or comms."
+    //
+    // This runs here, before playCcFull, and playCcFull's first gate is negate /
+    // comms — so the declaration is always settled before the opponent is asked.
+    //
+    // It used to cover only unique-figure cards, which left 92 hand-played
+    // restricted cards declaring nothing and falling back on "whoever is
+    // activating" at resolve time. getCcPlayerOptions answers it for all of them,
+    // and only offers figures that could LEGALLY play the card — including the
+    // things that change legality: Mara, There is Another, A New Hope, Taron's
+    // Fallen Master, the Darksaber, Programming Override, companion status, size.
+    const { getCcPlayerOptions } = await import('../game/unique-figure-ccs.js');
+    const options = getCcPlayerOptions(game, playerNum, card);
+    // Ask only when there is a genuine choice: more than one eligible figure, or
+    // a single one whose enabler COSTS something, so the player may decline the
+    // Fast Learner / A New Hope spend.
     const needsPrompt = options.length > 1
-      || (options.length === 1 && options[0].kind !== 'named');
+      || (options.length === 1 && !!options[0].consume && options[0].consume !== 'none');
     if (needsPrompt) {
       const { presentUniqueCcPlayerPicker } = await import('./fast-learner-picker.js');
       await presentUniqueCcPlayerPicker(interaction, game, playerNum, card, options);
       saveGames(game.gameId);
       return;
     }
-    // Exactly one named option (or none): no prompt. Anchor on the named figure
-    // when present so the range references it even if the legality path used an
-    // enabler substitution elsewhere.
+    // Exactly one legal figure, free: declare it without asking. Same principle
+    // alexanbv gave for Deployment-card plays — "skip the picker and pass the
+    // figure that is activating" — there is nothing to choose.
     if (options.length === 1) {
       _pickedFigureKey = options[0].figureKey;
       _pickedConsume = options[0].consume;

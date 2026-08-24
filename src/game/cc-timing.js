@@ -1073,7 +1073,7 @@ export function getPlayableReactionCardsForTiming(game, playerNum, timingTrigger
  * any 4-LOM figure on this player's side, the trait grant is
  * suppressed.
  */
-function _getProgrammingOverrideKeywords(game, playerNum, dcName) {
+export function _getProgrammingOverrideKeywords(game, playerNum, dcName) {
   const trait = game?.roundProgrammingOverrideTrait?.[playerNum];
   if (!trait) return null;
   const dcBase = getDcBaseName(dcName);
