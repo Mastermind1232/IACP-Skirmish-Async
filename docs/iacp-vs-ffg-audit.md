@@ -302,6 +302,48 @@ Shrewd Scoundrel interaction is delicate, so this needs alexanbv first.
 | Dirty Trick | (LFL/FFG) | matches |
 | Disorient | (LFL/FFG) | matches. Its config uses the `chooseAdjacentHostileThen` key but sets `range: 999`, so there is no adjacency restriction — correct, the card does not impose one. The key name is a misnomer here; it is shared, so left alone. |
 
+### Defender-side unique-figure CCs were playable by the wrong figure (fixed 2026-08-24)
+
+Found while auditing alexanbv's correction that "furious charge also is out of
+activation".
+
+A card reading "an attack targeting YOU" ties "you" to the figure being attacked.
+But `ctx.isDefender` in `cc-timing.js` is only PLAYER-level
+(`combat.defenderPlayerNum === playerNum`), and `isCcPlayLegalByRestriction` is
+army/board-level. Together that made a unique-figure defender-side CC playable
+whenever ANY of your figures was the defender — and the resolver then acted on
+that defender.
+
+Furious Charge (Gaarkhan) is the clearest case: a Rebel Trooper takes 3+ Damage
+while Gaarkhan stands across the map, and `fireFuriousCharge` readies the **Rebel
+Trooper's** Deployment card.
+
+Ten unique-figure CCs sit on a defender-side timing: Ambush, Dangerous Prey,
+Furious Charge, Gauntlet Blade, Let's Make a Deal, Payback, Reactive Loyalties,
+Right Back At Ya!, Stroke of Brilliance, and Preservation Protocol (excluded — it
+gates on `duringActivation`, a different shape).
+
+Fixed with one gate in `isCcPlayableNow` rather than ten patches. It asks
+`getUniqueCcPlayerOptions` who may legally play the card instead of re-listing the
+enablers, so it cannot drift out of step with the picker cc-hand shows, and it
+preserves every route in: the named figure, Mara via Fast Learner, a Force User
+via There is Another, and any friendly figure when an un-depleted [A New Hope] is
+in the army (alexanbv 2026-08-24: "debts repaid, like SoS, also has an option to
+work with any figure if A New Hope is in this list" — verified for both cards).
+
+The gate abstains rather than blocking whenever it cannot be sure: no live
+combat, no identifiable defender, or the named figure absent from the army (there
+the restriction gate is what rejects the play).
+
+**Deliberately NOT changed:** the keyword-restricted defender-side CCs (Counter
+Attack BRAWLER, Elusive SPY, Parry, Iron Will GUARDIAN, Heavy Armor VEHICLE,
+Knowledge and Defense, On the Lam, Run for Cover, Savage Vigor, Stealth Tactics,
+Brace Yourself, Brace for Impact, Camouflage, Deflection, Hard to Hit). Whether
+the DEFENDER must carry the keyword, rather than merely someone in your army, is
+the same shape of question but needs a ruling. Raised with alexanbv.
+
+Guarded by `tests/domain/oracle/cc-defender-identity-gate.test.js`.
+
 ### Debts Repaid anchored on the wrong figure (fixed 2026-08-22)
 
 Card: "Use when a friendly figure is defeated. Ready YOUR Deployment card and
@@ -323,10 +365,13 @@ the same way: an opt-in `anchorOnNamedFigure` flag routes the lookup through
 Fast Learner awareness for free.
 
 The flag is opt-in because the resolver block is shared with every other
-`applyFocus` card. Debts Repaid is the **only** one with an out-of-activation
-timing — the rest are duringActivation, specialAction or attack-declaration
+`applyFocus` card. Debts Repaid is the only one **in that block** with an
+out-of-activation timing — the rest are duringActivation, specialAction or attack-declaration
 timings where the activating figure genuinely is "you" — so nothing else changes.
-A test pins that a plain Focus still follows the activating figure.
+A test pins that a plain Focus still follows the activating figure. (alexanbv
+corrected the wider claim: Furious Charge is also out-of-activation. It is
+excluded from this block and handled separately — see the defender-identity gate
+above, which is what it actually needed.)
 
 Guarded by `tests/domain/oracle/cc-debts-repaid-anchor.test.js`.
 

@@ -31,7 +31,7 @@ export function depleteANewHope(game, playerNum) {
 }
 import { countGameSpaces } from './board-helpers.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
-import { getUniqueFigureCcEntry } from './unique-figure-ccs.js';
+import { getUniqueFigureCcEntry, getUniqueCcPlayerOptions } from './unique-figure-ccs.js';
 import { isNamedCcAlreadyPlayed } from './named-cc-tracker.js';
 
 /**
@@ -109,6 +109,50 @@ const SPECIAL_ACTION_TIMING = new Set([
  * @param {object} [getEffect] - Optional getCcEffect (default from data-loader)
  * @returns {boolean}
  */
+/**
+ * Timings where the card's "you" is the figure currently being attacked.
+ * Deliberately excludes whenYouHaveSufferedDamageEqualToYourHealth
+ * (Preservation Protocol), which gates on duringActivation rather than on being
+ * the defender and so is a different shape.
+ */
+const DEFENDER_SIDE_TIMINGS = new Set([
+  'afterattacktargetingyouresolved',
+  'whenattackdeclaredonyou',
+  'whiledefending',
+]);
+
+/**
+ * For a UNIQUE-FIGURE CC on a defender-side timing, the figure that would PLAY it
+ * must BE the defender of the live attack. Returns true for everything else
+ * (non-unique cards, no live combat, no identifiable defender) so this can only
+ * narrow a unique-figure card and never touches keyword or affiliation
+ * restrictions.
+ *
+ * Eligibility is not re-derived here. getUniqueCcPlayerOptions is the one place
+ * that knows who may play a unique-figure CC — the named figure, Mara via Fast
+ * Learner, a Force User via There is Another, or any friendly figure when an
+ * un-depleted [A New Hope] is in the army (alexanbv 2026-08-24: "debts repaid,
+ * like SoS, also has an option to work with any figure if A New Hope is in this
+ * list"). Asking it, rather than re-listing the enablers, keeps this from
+ * drifting out of step with the picker cc-hand shows.
+ */
+function uniqueFigureCcDefenderMatches(game, playerNum, cardName) {
+  if (!getUniqueFigureCcEntry(cardName)) return true;
+  const combat = game?.combat || game?.pendingCombat;
+  if (!combat) return true; // no live attack — other gates decide
+  if (combat.defenderPlayerNum !== playerNum) return false;
+  const defFk = combat.target?.figureKey || combat.defenderFigureKey;
+  if (!defFk) return true; // cannot identify the defender — do not block
+  let options = [];
+  try {
+    options = getUniqueCcPlayerOptions(game, playerNum, cardName) || [];
+  } catch {
+    return true; // never let this gate be the thing that breaks a play
+  }
+  if (options.length === 0) return true;
+  return options.some((o) => o.figureKey === defFk);
+}
+
 export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffect, opts = {}) {
   // Shadow Ops: opponent cannot play Command cards this round
   if (game?.shadowOpsBlockedPlayer === playerNum) return false;
@@ -153,6 +197,17 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
   if (_cbt?.ccLockedOut && timing === 'duringattack') return false;
 
   const ctx = getCcPlayContext(game, playerNum);
+
+  // Defender-side timings: "you" is the figure BEING ATTACKED. ctx.isDefender is
+  // only player-level (combat.defenderPlayerNum === playerNum), and the
+  // restriction gate is army/board-level, so without this a unique-figure CC was
+  // playable whenever ANY of your figures was the defender — and then acted on
+  // that defender rather than the named figure. Furious Charge readied a Rebel
+  // Trooper's card because a Rebel Trooper took the hit while Gaarkhan stood
+  // elsewhere (alexanbv 2026-08-24; found auditing his note that "furious charge
+  // also is out of activation"). Scoped to UNIQUE-FIGURE cards, where "you" is
+  // unambiguously the named figure; keyword restrictions are a separate question.
+  if (DEFENDER_SIDE_TIMINGS.has(timing) && !uniqueFigureCcDefenderMatches(game, playerNum, cardName)) return false;
 
   switch (timing) {
     case 'startofround':

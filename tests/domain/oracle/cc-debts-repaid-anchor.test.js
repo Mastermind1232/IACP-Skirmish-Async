@@ -103,3 +103,21 @@ describe('the anchor stays opt-in', () => {
     assert.ok(!g.figureConditions[CHEW]);
   });
 });
+
+describe('Debts Repaid honours [A New Hope]', () => {
+  // alexanbv 2026-08-24: "debts repaid, like SoS, also has an option to work with
+  // any figure if A New Hope is in this list". The named-figure anchor must not
+  // override a figure the player explicitly chose through an enabler.
+  it('readies and Focuses the CHOSEN figure, not Chewbacca', () => {
+    const g = game(null);
+    g.p1DcList.push({ dcName: '[A New Hope]' });
+    g.p1DcMessageIds.push('m-anh');
+    g.ccPlayedByFigureKey = TROOP; // the picker's [A New Hope] option
+    const r = play(g);
+    assert.equal(r.applied, true, r.manualMessage);
+    assert.deepEqual(r.readyDcMsgIds, [TROOP_MSG],
+      'the played-by choice wins over the named figure');
+    assert.deepEqual(g.figureConditions[TROOP], ['Focus']);
+    assert.ok(!g.figureConditions[CHEW], 'Chewbacca is not the one who played it');
+  });
+});
