@@ -136,21 +136,44 @@ const DEFENDER_SIDE_TIMINGS = new Set([
  * list"). Asking it, rather than re-listing the enablers, keeps this from
  * drifting out of step with the picker cc-hand shows.
  */
-function uniqueFigureCcDefenderMatches(game, playerNum, cardName) {
-  if (!getUniqueFigureCcEntry(cardName)) return true;
+function uniqueFigureCcDefenderMatches(game, playerNum, cardName, getEffect = getCcEffect) {
   const combat = game?.combat || game?.pendingCombat;
   if (!combat) return true; // no live attack — other gates decide
   if (combat.defenderPlayerNum !== playerNum) return false;
   const defFk = combat.target?.figureKey || combat.defenderFigureKey;
   if (!defFk) return true; // cannot identify the defender — do not block
-  let options = [];
-  try {
-    options = getUniqueCcPlayerOptions(game, playerNum, cardName) || [];
-  } catch {
-    return true; // never let this gate be the thing that breaks a play
+
+  // Unique-figure CC: ask the canonical eligibility list (see the note above).
+  if (getUniqueFigureCcEntry(cardName)) {
+    let options = [];
+    try {
+      options = getUniqueCcPlayerOptions(game, playerNum, cardName) || [];
+    } catch {
+      return true; // never let this gate be the thing that breaks a play
+    }
+    if (options.length === 0) return true;
+    return options.some((o) => o.figureKey === defFk);
   }
-  if (options.length === 0) return true;
-  return options.some((o) => o.figureKey === defFk);
+
+  // Keyword / affiliation restriction. alexanbv 2026-08-24: "the figure playing
+  // the card must have the keyword. If the card is played by the defender, the
+  // defender must have that keyword." On these timings the player IS the
+  // defender, so the DEFENDER must carry it — not merely somebody in the army,
+  // which is all isCcPlayLegalByRestriction checks.
+  //
+  // Cards played by a NEARBY figure while someone else defends — Guardian
+  // Stance, Bodyguard, Get Behind Me! — are a different case ("the figure
+  // playing the card ... is not always self") and sit on their own
+  // adjacent-friendly timings, so they never reach this gate.
+  const playableBy = (getEffect(cardName)?.playableBy || '').trim();
+  if (!playableBy || playableBy.toLowerCase() === 'any figure') return true;
+  const _p = playableBy.toLowerCase();
+  if (_p === 'any small figure' || _p === 'any unique figure' || _p === 'unique') return true;
+  const defDcName = combat.defenderDcName || dcNameFromFigureKey(defFk);
+  if (!defDcName) return true;
+  const defExtraKw = _getProgrammingOverrideKeywords(game, playerNum, defDcName);
+  const defDarksaber = hasDarksaberImperial(game, playerNum, defDcName);
+  return ccPlayableByMatches(playableBy, defDcName, combat.defenderDisplayName || defDcName, defDarksaber, defExtraKw, game);
 }
 
 export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffect, opts = {}) {
@@ -207,7 +230,7 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
   // elsewhere (alexanbv 2026-08-24; found auditing his note that "furious charge
   // also is out of activation"). Scoped to UNIQUE-FIGURE cards, where "you" is
   // unambiguously the named figure; keyword restrictions are a separate question.
-  if (DEFENDER_SIDE_TIMINGS.has(timing) && !uniqueFigureCcDefenderMatches(game, playerNum, cardName)) return false;
+  if (DEFENDER_SIDE_TIMINGS.has(timing) && !uniqueFigureCcDefenderMatches(game, playerNum, cardName, getEffect)) return false;
 
   switch (timing) {
     case 'startofround':

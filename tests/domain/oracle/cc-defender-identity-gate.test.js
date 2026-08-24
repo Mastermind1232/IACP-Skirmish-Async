@@ -63,12 +63,10 @@ describe('[A New Hope] still opens it to any friendly figure', () => {
 });
 
 describe('the gate only narrows unique-figure cards', () => {
-  it('a keyword-restricted defender-side CC is untouched', () => {
-    // Counter Attack is BRAWLER, not a unique-figure CC. Whether the defender
-    // must have the keyword is a separate question, deliberately not decided here.
-    assert.equal(isCcPlayableNow(game(TROOP), 1, 'Counter Attack'), true);
-    assert.equal(isCcPlayableNow(game(GAAR), 1, 'Counter Attack'), true);
-  });
+  // NOTE: an earlier revision asserted that keyword-restricted defender-side CCs
+  // were left untouched. alexanbv ruled on that the same day — "the figure
+  // playing the card must have the keyword" — so they are now gated too. The
+  // keyword cases live in their own describe block below.
 
   it('does not block when the named figure is not in the army at all', () => {
     // Bo-Katan is absent, so getUniqueCcPlayerOptions is empty and this gate
@@ -81,5 +79,52 @@ describe('the gate only narrows unique-figure cards', () => {
     delete g.pendingCombat;
     // No combat: other gates decide, this one abstains rather than hard-failing.
     assert.doesNotThrow(() => isCcPlayableNow(g, 1, 'Furious Charge'));
+  });
+});
+
+describe('keyword-restricted defender-side CCs need the DEFENDER to have the keyword', () => {
+  // alexanbv 2026-08-24: "the figure playing the card must have the keyword. If
+  // the card is played by the defender, the defender must have that keyword."
+  // Gaarkhan is WOOKIEE / GUARDIAN / BRAWLER; the Rebel Trooper is TROOPER only.
+  const TROOP_R = 'Rebel Trooper (Regular)-2-0';
+  function kwGame(defFk, defDc) {
+    return {
+      gameId: 'g', currentRound: 2, player1Id: 'p1', player2Id: 'p2',
+      currentActivationTurnPlayerId: 'p2',
+      figurePositions: { 1: { [GAAR]: 'e19', [TROOP_R]: 'e20' } },
+      p1DcList: [{ dcName: 'Gaarkhan' }, { dcName: 'Rebel Trooper (Regular)' }],
+      p1DcMessageIds: ['m-gaar', 'm-troop'],
+      pendingCombat: {
+        attackerPlayerNum: 2, defenderPlayerNum: 1,
+        target: { figureKey: defFk }, defenderDcName: defDc,
+      },
+    };
+  }
+  const gaarDefends = () => kwGame(GAAR, 'Gaarkhan');
+  const troopDefends = () => kwGame(TROOP_R, 'Rebel Trooper (Regular)');
+
+  it('Counter Attack (BRAWLER) needs the BRAWLER to be the one attacked', () => {
+    assert.equal(isCcPlayableNow(gaarDefends(), 1, 'Counter Attack'), true);
+    assert.equal(isCcPlayableNow(troopDefends(), 1, 'Counter Attack'), false,
+      'a TROOPER taking the hit does not let a BRAWLER card be played');
+  });
+
+  it('Iron Will (GUARDIAN) likewise', () => {
+    assert.equal(isCcPlayableNow(gaarDefends(), 1, 'Iron Will'), true);
+    assert.equal(isCcPlayableNow(troopDefends(), 1, 'Iron Will'), false);
+  });
+
+  it('an unrestricted defender-side card is unaffected', () => {
+    assert.equal(isCcPlayableNow(gaarDefends(), 1, 'Brace Yourself'), true);
+    assert.equal(isCcPlayableNow(troopDefends(), 1, 'Brace Yourself'), true);
+  });
+
+  it('cards played by a NEARBY figure never reach this gate', () => {
+    // alexanbv: "Some cards are played by nearby figure while someone else is
+    // defending, for example guardian stance, bodyguard, get behind me." Those
+    // sit on adjacent-friendly timings, so the defender's keywords are not the
+    // test — the PLAYING figure's are, and that is handled elsewhere.
+    assert.equal(isCcPlayableNow(troopDefends(), 1, 'Guardian Stance'), true,
+      'a TROOPER defending must not block a nearby GUARDIAN playing Guardian Stance');
   });
 });

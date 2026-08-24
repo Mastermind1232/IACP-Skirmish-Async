@@ -335,12 +335,34 @@ The gate abstains rather than blocking whenever it cannot be sure: no live
 combat, no identifiable defender, or the named figure absent from the army (there
 the restriction gate is what rejects the play).
 
-**Deliberately NOT changed:** the keyword-restricted defender-side CCs (Counter
-Attack BRAWLER, Elusive SPY, Parry, Iron Will GUARDIAN, Heavy Armor VEHICLE,
-Knowledge and Defense, On the Lam, Run for Cover, Savage Vigor, Stealth Tactics,
-Brace Yourself, Brace for Impact, Camouflage, Deflection, Hard to Hit). Whether
-the DEFENDER must carry the keyword, rather than merely someone in your army, is
-the same shape of question but needs a ruling. Raised with alexanbv.
+**Keyword restrictions: RULED and included (alexanbv 2026-08-24).**
+
+> "the figure playing the card must have the keyword. If the card is played by
+>  the defender, the defender must have that keyword. Some cards are played by
+>  nearby figure while someone else is defending, for example guardian stance,
+>  bodyguard, get behind me. In each case, the figure playing the card (which is
+>  defended if self, but it is not always self) that had to have the keyword"
+
+So on these timings the player IS the defender, and the DEFENDER must carry the
+keyword — not merely somebody in the army, which is all
+`isCcPlayLegalByRestriction` checks. Counter Attack (BRAWLER) is no longer
+playable because a TROOPER took the hit while a BRAWLER stood elsewhere. Same for
+Elusive, Parry, Iron Will, Heavy Armor, Knowledge and Defense, On the Lam, Run
+for Cover, Savage Vigor and Stealth Tactics. Unrestricted ones (Brace Yourself,
+Brace for Impact, Camouflage, Hard to Hit) are unaffected by definition.
+
+The match is delegated to `ccPlayableByMatches`, the same per-DC matcher the
+Special Action menu uses, so Programming Override's granted keywords and the
+Darksaber's IMPERIAL access keep working on the defender.
+
+**The nearby-figure cards are a different case and never reach this gate.**
+Guardian Stance, Bodyguard and Get Behind Me! are played by a figure standing
+near the defender, so it is the PLAYING figure that needs the keyword, not the
+defender. They sit on their own adjacent-friendly timings
+(`whileAdjacentFriendlyFigureDefending`, `whenAttackDeclaredOnAdjacentFriendly`,
+`whenAttackDeclaredTargetingFriendlySmallFigureCost10OrLessWithin3Spaces`), which
+are deliberately not in `DEFENDER_SIDE_TIMINGS`. A test pins that a TROOPER
+defending does not block a nearby GUARDIAN from playing Guardian Stance.
 
 Guarded by `tests/domain/oracle/cc-defender-identity-gate.test.js`.
 
