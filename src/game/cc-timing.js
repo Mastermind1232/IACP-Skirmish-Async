@@ -534,6 +534,10 @@ export function figureMatchesCcRestriction(game, dcName, displayName, playableBy
   const baseKw = kwMap[dcName] || kwMap[base] || kwMap[`${base} (Elite)`] || kwMap[`${base} (Regular)`] || [];
   const kw = [...baseKw, ...(extraKeywords || [])].map((k) => String(k).toLowerCase());
   const isMassive = kw.includes('massive');
+  const _dcE = getDcEffects() || {};
+  const affiliation = String(
+    (_dcE[dcName] || _dcE[base] || _dcE[`${base} (Elite)`] || _dcE[`${base} (Regular)`] || {}).affiliation || '',
+  ).toLowerCase();
   const alts = pb.split(/\s+or\s+/i)
     .map((a) => a.trim().replace(/^"|"$/g, '').toLowerCase())
     .map((a) => a.replace(/^any\s+/, '').replace(/\s+figure$/, '').trim());
@@ -551,8 +555,44 @@ export function figureMatchesCcRestriction(game, dcName, displayName, playableBy
     }
     // name / faction / trait keyword (ccPlayableByMatches handles its own casing)
     if (ccPlayableByMatches(a, dcName, displayName, hasDarksaber, kw, game)) return true;
+    // AFFILIATION. ccPlayableByMatches only knows names and keywords, so a SCUM
+    // figure did not satisfy a "SCUM" restriction here — the affiliation test
+    // lived only in the ARMY-level gate (alternativeMatchesDc). That is fine
+    // while nothing asks per figure, and wrong the moment something does: the
+    // universal "who is playing this card" declaration is exactly such a caller.
+    // Audit 2026-08-24.
+    if (_affiliationSatisfies(a, affiliation, kw, hasDarksaber)) return true;
   }
   return false;
+}
+
+/**
+ * Does an affiliation restriction alternative match this figure?
+ *
+ * `alt` may be a bare faction ("scum") or a faction plus traits
+ * ("imperial force user"), in which case every trait must also be held.
+ * `factionWaived` covers the abilities that let a figure ignore the faction
+ * SYMBOL while the rest of the restriction box still applies — the Darksaber,
+ * and Taron Malicos's Fallen Master (alexanbv 2026-08-24: "Tarons ability just
+ * lets non-companion force user ignore faction symbol in the restriction box,
+ * other restrictions still apply").
+ */
+const _FACTIONS = ['rebel', 'imperial', 'scum', 'mercenary'];
+function _affiliationSatisfies(alt, affiliationLower, kwLower, factionWaived) {
+  const words = String(alt || '').trim().split(/\s+/);
+  const faction = words.find((w) => _FACTIONS.includes(w));
+  if (!faction) return false;
+  // Mercenary and Scum are the same faction under two names in this data set.
+  const _same = (a, b) => a === b
+    || (a === 'mercenary' && b === 'scum') || (a === 'scum' && b === 'mercenary');
+  const factionOk = _same(faction, String(affiliationLower || '').toLowerCase())
+    || (factionWaived && faction === 'imperial');
+  if (!factionOk) return false;
+  // Every non-faction word must be a trait the figure actually has.
+  const traits = words.filter((w) => !_FACTIONS.includes(w));
+  if (traits.length === 0) return true;
+  const joined = traits.join(' ');
+  return kwLower.includes(joined) || traits.every((t) => kwLower.includes(t));
 }
 
 /**

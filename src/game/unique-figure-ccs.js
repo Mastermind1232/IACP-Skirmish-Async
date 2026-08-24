@@ -301,3 +301,118 @@ export function getKeywordAnchorPlayerOptions(game, playerNum, cardName) {
   }
   return options;
 }
+
+// ── Universal "who is playing this Command card" declaration ────────────────
+//
+// alexanbv 2026-08-24:
+//   "For any CC that is played by a figure, the first thing that must be
+//    determined is which figure is playing it. Any CC with a restriction box is
+//    a CC played by a figure. Futhermore, the player playing the CC must declare
+//    which figure is playing the CC before opponent decides whether or not to
+//    negate or comms."
+//   "Only figures who can legally play the card should be offered. This step
+//    should check legality and any changes to legality including Mara, a new
+//    hope, taron, dark saber, companion, small, large, etc etc"
+//
+// Before this, only unique-figure cards (getUniqueCcPlayerOptions) and exactly
+// one keyword card (Just Business) ever determined a figure. The other 92
+// hand-played restricted cards determined nothing, so their effects fell back on
+// "whoever is activating" — which is how Opportunistic came to hand its movement
+// points to a non-SCUM figure, and to fail outright when played as the reaction
+// it is, on the opponent's turn.
+
+/** True iff this figure's Deployment card is a companion (e.g. The Child). */
+export function figureIsCompanion(figureKey) {
+  const eff = (getDcEffects() || {})[dcNameFromFigureKey(figureKey)] || {};
+  return eff.companion === true;
+}
+
+/** True iff this player's army contains Taron Malicos (Fallen Master). */
+function _armyHasFallenMaster(game, playerNum) {
+  const dcEffects = getDcEffects() || {};
+  const list = (playerNum === 1 ? game?.p1DcList : game?.p2DcList) || [];
+  for (const dc of list) {
+    const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+    if (!dcName) continue;
+    if ((dcEffects[dcName]?.specialAbilityIds || []).includes('fallen_master_malicos')) return true;
+  }
+  return false;
+}
+
+/**
+ * Does Fallen Master waive the faction symbol for THIS figure?
+ *
+ * alexanbv: "Taron only allows non-companion Force Users to ignore the
+ * restriction", and "Tarons ability just lets non-companion force user ignore
+ * faction symbol in the restriction box, other restrictions still apply."
+ *
+ * The companion exclusion is the reason this has to be a per-figure test: The
+ * Child is a FORCE USER companion, and an army-wide check has no figure to
+ * exclude.
+ */
+export function fallenMasterWaivesFactionFor(game, playerNum, figureKey) {
+  if (!_armyHasFallenMaster(game, playerNum)) return false;
+  if (figureIsCompanion(figureKey)) return false;
+  return _figureIsForceUser(figureKey);
+}
+
+/**
+ * Every figure that may LEGALLY play this Command card right now, in the order
+ * the player should be offered them.
+ *
+ * Native qualification is delegated to figureMatchesCcRestriction, which already
+ * understands name / faction / trait / size / unique / non-massive. The two
+ * abilities that change whether a figure NATIVELY satisfies a FACTION symbol are
+ * folded in as its darksaber flag, which is exactly what that flag models:
+ *   The Darksaber  - a FORCE USER holding it may use IMPERIAL cards
+ *   Fallen Master  - a non-companion FORCE USER ignores the faction symbol
+ *
+ * The three enablers that let a figure play a card it does not qualify for at
+ * all are name-restriction devices, so they only apply to unique-figure cards
+ * and are delegated to getUniqueCcPlayerOptions to keep one copy of that
+ * precedence (Fast Learner before There is Another before A New Hope).
+ *
+ * @returns {Array<{figureKey, dcName, displayName, kind, consume}>}
+ */
+export function getCcPlayerOptions(game, playerNum, cardName, opts = {}) {
+  const { getExtraKeywords = null, hasDarksaberFor = null } = opts;
+  const playableBy = String(getCcEffect(cardName)?.playableBy || '').trim();
+  const liveKeys = _liveFigureKeys(game, playerNum);
+  if (liveKeys.length === 0) return [];
+
+  // No restriction box: the card is not played "by" a restricted figure, so
+  // there is nothing to declare and nothing to offer.
+  if (!playableBy || playableBy.toLowerCase() === 'any figure') return [];
+
+  const out = [];
+  const seen = new Set();
+  const add = (figureKey, kind, consume) => {
+    if (seen.has(figureKey)) return;
+    seen.add(figureKey);
+    out.push({
+      figureKey,
+      dcName: dcNameFromFigureKey(figureKey),
+      displayName: dcNameFromFigureKey(figureKey),
+      kind,
+      consume,
+    });
+  };
+
+  for (const fk of liveKeys) {
+    const dcName = dcNameFromFigureKey(fk);
+    const extraKeywords = getExtraKeywords ? getExtraKeywords(game, playerNum, dcName) : null;
+    const darksaber = hasDarksaberFor ? !!hasDarksaberFor(game, playerNum, dcName) : false;
+    const factionWaived = darksaber || fallenMasterWaivesFactionFor(game, playerNum, fk);
+    if (figureMatchesCcRestriction(game, dcName, dcName, playableBy, {
+      hasDarksaber: factionWaived, extraKeywords,
+    })) {
+      add(fk, 'restriction', 'none');
+    }
+  }
+
+  // Enablers (name-restriction devices) only reach unique-figure cards.
+  for (const o of getUniqueCcPlayerOptions(game, playerNum, cardName)) {
+    add(o.figureKey, o.kind, o.consume);
+  }
+  return out;
+}
