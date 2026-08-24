@@ -109,6 +109,18 @@ const SPECIAL_ACTION_TIMING = new Set([
  * @param {object} [getEffect] - Optional getCcEffect (default from data-loader)
  * @returns {boolean}
  */
+/** True iff this player's army contains Taron Malicos (Fallen Master). */
+function _armyHasFallenMaster(game, playerNum) {
+  const dcEffects = getDcEffects() || {};
+  for (const dc of (getDcList(game, playerNum) || [])) {
+    const dcName = typeof dc === 'object' ? (dc.dcName || dc.displayName) : dc;
+    if (!dcName) continue;
+    const sIds = dcEffects[dcName]?.specialAbilityIds || [];
+    if (sIds.includes('fallen_master_malicos')) return true;
+  }
+  return false;
+}
+
 /**
  * Timings where the card's "you" is the figure currently being attacked.
  * Deliberately excludes whenYouHaveSufferedDamageEqualToYourHealth
@@ -172,8 +184,19 @@ function uniqueFigureCcDefenderMatches(game, playerNum, cardName, getEffect = ge
   const defDcName = combat.defenderDcName || dcNameFromFigureKey(defFk);
   if (!defDcName) return true;
   const defExtraKw = _getProgrammingOverrideKeywords(game, playerNum, defDcName);
-  const defDarksaber = hasDarksaberImperial(game, playerNum, defDcName);
-  return ccPlayableByMatches(playableBy, defDcName, combat.defenderDisplayName || defDcName, defDarksaber, defExtraKw, game);
+  // Both of these grant IMPERIAL access to a figure that is not Imperial, and
+  // ccPlayableByMatches models exactly that as its darksaber flag, so reuse it:
+  //   The Darksaber       - a FORCE USER holding it may use IMPERIAL CCs
+  //   Fallen Master (Taron Malicos) - "Friendly non-companion FORCE USER figures
+  //                         may ignore the IMPERIAL restriction"
+  // No IMPERIAL-restricted CC currently sits on a defender-side timing, so this
+  // changes nothing today; it is here so adding one later cannot silently break
+  // either ability (audit 2026-08-24).
+  const _defIsForceUser = ((getDcKeywords(game)[defDcName] || [])
+    .map((k) => String(k).toLowerCase())).includes('force user');
+  const _fallenMasterImperial = _defIsForceUser && _armyHasFallenMaster(game, playerNum);
+  const defImperialAccess = hasDarksaberImperial(game, playerNum, defDcName) || _fallenMasterImperial;
+  return ccPlayableByMatches(playableBy, defDcName, combat.defenderDisplayName || defDcName, defImperialAccess, defExtraKw, game);
 }
 
 export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffect, opts = {}) {
