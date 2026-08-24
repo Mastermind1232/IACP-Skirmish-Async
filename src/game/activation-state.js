@@ -431,6 +431,17 @@ export function figureKeyForActivation(game, msgId, overrideFigureIndex) {
   const meta = _dcMessageMeta?.get(msgId);
   if (!meta?.dcName) return null;
   const dgIndex = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+  // The figure that DECLARED it is playing the Command card is "you", even when
+  // it is not the one activating (alexanbv 2026-08-24). Without this a
+  // multi-figure group falls back to selectedFigure ?? 0, so a card declared by
+  // figure 2 of a group would resolve as figure 0 — the same class of bug as
+  // resolving it on the activating group instead of the declaring one.
+  // game.ccPlayedByFigureKey exists only during a Command card's resolution
+  // (cc-hand sets it, and clears it in a finally), so nothing else is affected.
+  if (overrideFigureIndex == null) {
+    const declared = game?.ccPlayedByFigureKey;
+    if (declared && String(declared).startsWith(`${meta.dcName}-${dgIndex}-`)) return declared;
+  }
   const figureIndex = overrideFigureIndex != null
     ? overrideFigureIndex
     : (game?.dcActionsData?.[msgId]?.selectedFigure ?? 0);

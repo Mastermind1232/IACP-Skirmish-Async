@@ -5868,9 +5868,8 @@ export function resolveAbility(abilityId, context) {
       const _mpDeclMsgId = findMsgIdForFigureKey(game, playerNum, _mpDeclaredFk, dcMessageMeta);
       if (_mpDeclMsgId) {
         const _mpN = entry.mpBonus;
-        const _mpActiveMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
         const _mpName = dcNameFromFigureKey(_mpDeclaredFk);
-        if (_mpActiveMsgId && _mpActiveMsgId === _mpDeclMsgId) {
+        if (isMsgIdActivating(game, _mpDeclMsgId)) {
           addMovementPoints(game, _mpDeclMsgId, _mpN);
           return { applied: true, refreshMovementBank: true, activeMsgId: _mpDeclMsgId,
             logMessage: `**${entry.label || cardName || 'Move'}** — **${_mpName}** gained **${_mpN} MP** (banked — figure is activating).` };
@@ -5907,8 +5906,7 @@ export function resolveAbility(abilityId, context) {
         if (choiceIndex !== undefined && choiceIndex !== null && chosenFigureKey) {
           const chosenMsgId = findMsgIdForFigureKey(game, playerNum, chosenFigureKey, dcMessageMeta);
           if (chosenMsgId) {
-            const activeMsgId = findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-            if (activeMsgId && activeMsgId === chosenMsgId) {
+            if (isMsgIdActivating(game, chosenMsgId)) {
               // Figure is currently activating — MP banks normally.
               addMovementPoints(game, chosenMsgId, n);
               return { applied: true, logMessage: `**Opportunistic** — **${dcNameFromFigureKey(chosenFigureKey)}** gained **${n} MP** (banked — figure is currently activating).` };
@@ -16748,8 +16746,49 @@ function countDefeatedFriendlyFigures(game, playerNum) {
 }
 
 /** Find msgId of the DC currently being activated by playerNum (has dcActionsData). */
+/**
+ * Is this Deployment card genuinely mid-activation right now?
+ *
+ * Deliberately NOT findActiveActivationMsgId, which now answers "which figure is
+ * acting" and returns the DECLARED figure during a Command card's resolution.
+ * Callers that need the literal question — chiefly the movement-point bank rule,
+ * where points bank only for a figure that is actually activating (alexanbv
+ * 2026-07-13) — must ask this instead, or every declared figure looks activating.
+ *
+ * A granted action (handlers/granted-action.js) synthesizes an activation record
+ * for an interrupting figure, so it is excluded: that figure is not activating.
+ */
+function isMsgIdActivating(game, msgId) {
+  if (!msgId) return false;
+  const ad = game?.dcActionsData?.[msgId];
+  return !!ad && !ad.grantedAction;
+}
+
 function findActiveActivationMsgId(game, playerNum, dcMessageMeta) {
-  if (!game?.dcActionsData || !dcMessageMeta) return null;
+  if (!dcMessageMeta) return null;
+  // THE DECLARED FIGURE IS "YOU" (alexanbv 2026-08-24: "For any CC that is played
+  // by a figure, the first thing that must be determined is which figure is
+  // playing it").
+  //
+  // cc-hand sets game.ccPlayedByFigureKey immediately before resolveAbility and
+  // deletes it in a finally, so it exists ONLY for the duration of one Command
+  // card's resolution. Outside that it is absent and this behaves exactly as it
+  // did — which is why a single change here can correct every resolver that
+  // reached for "whoever is activating" instead of the figure that played the
+  // card, rather than editing 109 call sites and missing some.
+  //
+  // Whether the card may be played at all is settled earlier by the timing gate
+  // (isCcPlayableNow) and the declaration itself, which only offers figures that
+  // could legally play it. By the time a resolver asks this question the answer
+  // it wants is "which figure is acting", not "is somebody activating".
+  const declared = game?.ccPlayedByFigureKey;
+  if (declared && game?.figurePositions?.[playerNum]?.[declared]) {
+    for (const [msgId, meta] of dcMessageMeta) {
+      if (meta?.gameId !== game.gameId || meta?.playerNum !== playerNum) continue;
+      if (getFigureKeysForDcMsg(game, playerNum, meta).includes(declared)) return msgId;
+    }
+  }
+  if (!game?.dcActionsData) return null;
   for (const [msgId, meta] of dcMessageMeta) {
     if (meta?.gameId === game.gameId && meta?.playerNum === playerNum && game.dcActionsData?.[msgId]) {
       return msgId;
