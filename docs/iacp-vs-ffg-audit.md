@@ -439,6 +439,19 @@ Guarded by `tests/domain/oracle/cc-interrupt-window-declaration.test.js`.
 | Fatal Deception | (LFL/FFG) | matches |
 | Feral Swipes | (LFL/FFG) | matches, including the printed melee icon |
 
+| Ferocity | (LFL/FFG) | matches |
+| Field Supply | (LFL/FFG) | text matches. **OPEN:** the card says "Up to 2 **other figures** within 3 spaces", not "friendly". The resolver offers friendlies only. Practically nobody hands an enemy a token, so the impact is nil, but it is a divergence — raised with alexanbv rather than changed. |
+| Field Tactician | (LFL/FFG) | matches |
+| Fleet Footed | (LFL/FFG) | matches |
+| Flurry of Blades | (LFL/FFG) | matches, including the double Special Action arrow |
+| Fool Me Once | (LFL/FFG) | matches, including the 2 Strain cost |
+| Force Illusion | (LFL/FFG) | matches |
+| Force Jump | (LFL/FFG) | matches |
+| Force Push | (LFL/FFG) | **RESTRICTION DRIFT, FIXED 2026-08-24.** Its band prints the Rebel starbird before "Force User"; we stored plain FORCE USER, so an Imperial or Scum Force User could play it. Force Rush and Force Surge, either side of it on the same sheet, print no icon and are correct as stored. |
+| Force Rush | (LFL/FFG) | matches |
+| Force Surge | (LFL/FFG) | matches |
+| Foresee | (LFL/FFG) | matches |
+
 ### Stale library labels are worth fixing
 
 `entry.label` is not dead metadata: it surfaces to players in manual-resolve
@@ -558,7 +571,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**136 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**148 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and

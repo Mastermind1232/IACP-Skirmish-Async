@@ -813,7 +813,7 @@
     },
     "Force Push": {
       "cost": 1,
-      "playableBy": "FORCE USER",
+      "playableBy": "REBEL FORCE USER",
       "timing": "duringActivation",
       "effect": "Use during your activation. Choose another SMALL figure within 3 spaces. Push that figure up to 2 spaces.",
       "abilityId": "Force Push"

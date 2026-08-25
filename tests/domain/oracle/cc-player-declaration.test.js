@@ -170,3 +170,30 @@ describe('Lure of the Dark Side: you may play cards for the figure you control',
       'a Lure we are not running gives us nothing');
   });
 });
+
+describe('Force Push is a REBEL Force User card', () => {
+  // Its band prints the Rebel starbird before "Force User"; Force Rush and Force
+  // Surge, the two cards either side of it on the same sheet, print no icon.
+  // We stored plain FORCE USER, so an Imperial or Scum Force User could play it.
+  // Found during the card sweep 2026-08-24.
+  const one = (n) => ({
+    gameId: 'g',
+    p1DcList: [{ dcName: n }],
+    p1DcMessageIds: ['m0'],
+    figurePositions: { 1: { [`${n}-1-0`]: 'e19' } },
+  });
+
+  it('a Rebel FORCE USER may play it', () => {
+    assert.deepEqual(getCcPlayerOptions(one('Cal Kestis'), 1, 'Force Push').map((o) => o.dcName), ['Cal Kestis']);
+  });
+
+  it('an Imperial FORCE USER may not', () => {
+    assert.deepEqual(getCcPlayerOptions(one('Darth Vader'), 1, 'Force Push'), []);
+  });
+
+  it('the unrestricted Force cards are unaffected', () => {
+    // Force Rush and Force Surge carry no faction icon, so any Force User plays them.
+    assert.deepEqual(getCcPlayerOptions(one('Darth Vader'), 1, 'Force Rush').map((o) => o.dcName), ['Darth Vader']);
+    assert.deepEqual(getCcPlayerOptions(one('Darth Vader'), 1, 'Force Surge').map((o) => o.dcName), ['Darth Vader']);
+  });
+});
