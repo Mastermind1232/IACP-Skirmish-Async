@@ -513,6 +513,15 @@ to single-window cards and says why.
 
 Guarded by `tests/domain/oracle/cc-i-can-feel-it-windows.test.js`.
 
+| Lock On | (LFL/FFG) | matches, all three options |
+| Lure of the Dark Side | IACP (roundel) | matches; the "2 Hit Tokens" it grants really are Hit tokens (`grantPowerTokens 'Damage'`), consistent with the token-face work above |
+| Negation | (LFL/FFG) | matches |
+| Marksman | (LFL/FFG) | matches, including the printed Ranged icon |
+| Ready Weapons | (LFL/FFG) | matches |
+| Size Advantage | (LFL/FFG) | matches |
+| Take Cover | (LFL/FFG) | matches |
+| Take Initiative | (LFL/FFG) | matches |
+
 ### Stale library labels are worth fixing
 
 `entry.label` is not dead metadata: it surfaces to players in manual-resolve
@@ -632,7 +641,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**172 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**180 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and
