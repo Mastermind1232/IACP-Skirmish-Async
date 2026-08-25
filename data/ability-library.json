@@ -2553,7 +2553,7 @@
     },
     "I Can Feel It": {
       "type": "ccEffect",
-      "label": "After attack/defense roll: choose one — reroll one die, gain 1 VP, or become Focused",
+      "label": "Choose one: reroll 1 attack die, reroll 1 defense die, or gain 1 VP",
       "chooseOne": [
         {
           "label": "Reroll one attack die",
