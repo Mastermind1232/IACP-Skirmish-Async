@@ -2553,19 +2553,22 @@
     },
     "I Can Feel It": {
       "type": "ccEffect",
-      "label": "Choose one: reroll 1 attack die, reroll 1 defense die, or gain 1 VP",
+      "label": "One ability per window: defending → reroll a defense die; attacking → reroll an attack die; Special Action → gain 1 VP",
       "chooseOne": [
         {
           "label": "Reroll one attack die",
-          "rerollOneDieByPlayer": "attacker"
+          "rerollOneDieByPlayer": "attacker",
+          "window": "duringattack"
         },
         {
           "label": "Reroll one defense die",
-          "rerollOneDieByPlayer": "defender"
+          "rerollOneDieByPlayer": "defender",
+          "window": "whiledefending"
         },
         {
           "label": "Gain 1 VP",
-          "vpGain": 1
+          "vpGain": 1,
+          "window": "specialaction"
         }
       ],
       "wiredStatus": "wired"

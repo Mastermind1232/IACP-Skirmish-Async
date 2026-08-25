@@ -301,8 +301,13 @@ describe('CC Play Deep: isCcPlayableNow timing categories', () => {
       combat: { attackerPlayerNum: 1, defenderPlayerNum: 2 },
     });
     game.currentActivationTurnPlayerId = game.player1Id;
+    // Single-window cards only. A MULTI-window card (`timings`) may also have an
+    // attacking or Special Action window, so the attacker legitimately can play
+    // it — I Can Feel It is one, per alexanbv 2026-08-24: "I can feel it can be
+    // played in three different windows." The invariant below is about
+    // defender-only cards, and still holds for them.
     const defCards = Object.entries(ccData.cards || {})
-      .filter(([, v]) => v.timing?.toLowerCase() === 'whiledefending')
+      .filter(([, v]) => v.timing?.toLowerCase() === 'whiledefending' && !Array.isArray(v.timings))
       .map(([k]) => k);
     if (defCards.length > 0) {
       const p1Playable = defCards.filter(c => isCcPlayableNow(game, 1, c));

@@ -1026,9 +1026,14 @@
     "I Can Feel It": {
       "cost": 0,
       "playableBy": "FORCE USER",
-      "timing": "other",
+      "timing": "whileDefending",
       "effect": "(MULTIPLE TIMING WINDOWS)\n\nUse while defending to reroll 1 defense die. \n\nUse while attacking to reroll 1 attack die. \n\nSpecial Action: Gain 1 VP.",
-      "abilityId": "I Can Feel It"
+      "abilityId": "I Can Feel It",
+      "timings": [
+        "whileDefending",
+        "duringAttack",
+        "specialAction"
+      ]
     },
     "I Make My Own Luck": {
       "cost": 2,

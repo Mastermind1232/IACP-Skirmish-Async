@@ -474,10 +474,44 @@ Guarded by `tests/domain/oracle/cc-interrupt-window-declaration.test.js`.
 | Hour of Need | (LFL/FFG) | matches |
 | Hunt Them Down | (LFL/FFG) | matches |
 | Hunter Protocol | (LFL/FFG) | matches |
-| I Can Feel It | (LFL/FFG) | options match: reroll 1 attack die, reroll 1 defense die, or gain 1 VP. Its **label** advertised a fourth, "become Focused", that the card does not have; the option list itself was correct, so nothing was playable that should not have been. Label corrected. **OPEN:** the card prints three separate abilities divided by rules — two combat reactions and a Special Action — and we model them as one choose-one prompt. Raised with alexanbv. |
+| I Can Feel It | (LFL/FFG) | **LIVE BUG, FIXED 2026-08-24.** See the multi-window section below. Its label also advertised a "become Focused" option the card does not have; the option list itself was correct, so nothing was playable that should not have been. |
 | I Make My Own Luck | (LFL/FFG) | matches |
 | Jump Jets | (LFL/FFG) | matches |
 | Learn by Example | (LFL/FFG) | matches |
+
+### Multi-window cards (I Can Feel It, fixed 2026-08-24)
+
+alexanbv: "yes, I can feel it can be played in three different windows. When
+played, you only get the ONE ability corresponding to the window in which it was
+played."
+
+The card prints three abilities divided by rules: reroll a defense die while
+defending, reroll an attack die while attacking, and a Special Action for 1 VP.
+We stored it as `timing: 'other'`, which resolves to "during your activation".
+Two consequences, both live:
+
+- **The defending window was unreachable.** It fires on the OPPONENT's turn, and
+  "during your activation" excludes that entirely. A third of the card did not
+  exist.
+- **All three abilities were offered as a free choice** whenever it was played,
+  so you could play it while defending and take the VP instead.
+
+Fixed with a general `timings` array on the card plus a `window` tag on each
+option. `isCcPlayableNow` opens the card if ANY listed hand-window is live,
+`isCcPlayableByDc` surfaces it on the Deployment card button when one of the
+windows is a Special Action, and the resolver narrows the option list to the live
+window — with one option left it resolves without prompting, which is the normal
+case.
+
+`I Can Feel It` is the only card carrying `timings` today; the mechanism is
+general so a second one needs data, not code.
+
+One headless invariant needed rescoping rather than editing: "whileDefending
+cards only playable by defender" is true of SINGLE-window cards, and a
+multi-window card may legitimately also have an attacking window. It now filters
+to single-window cards and says why.
+
+Guarded by `tests/domain/oracle/cc-i-can-feel-it-windows.test.js`.
 
 ### Stale library labels are worth fixing
 

@@ -225,6 +225,30 @@ export function isCcPlayableNow(game, playerNum, cardName, getEffect = getCcEffe
   if (!opts.ignoreCommsJammer && game?.commsJammerActivePlayerNum && game.commsJammerActivePlayerNum !== playerNum) return false;
   const effect = getEffect(cardName);
   if (!effect || !effect.timing) return false;
+
+  // MULTI-WINDOW CARDS. alexanbv 2026-08-24: "I can feel it can be played in
+  // three different windows. When played, you only get the ONE ability
+  // corresponding to the window in which it was played." A card can therefore
+  // list several `timings`; it is playable from hand if ANY of the non-Special-
+  // Action ones is open. (Special Action windows come off the Deployment card
+  // button, handled in isCcPlayableByDc, so they are skipped here as usual.)
+  //
+  // Before this, I Can Feel It was `timing: 'other'` — which means "during your
+  // activation" — so its DEFENDING window, the one that fires on the opponent's
+  // turn, could never be reached at all.
+  const _timings = Array.isArray(effect.timings) && effect.timings.length
+    ? effect.timings.map((t) => String(t).toLowerCase().trim())
+    : null;
+  if (_timings) {
+    const fromHand = _timings.filter((t) => !SPECIAL_ACTION_TIMING.has(t));
+    if (fromHand.length === 0) return false;
+    return fromHand.some((t) => isCcPlayableNow(
+      game, playerNum, cardName,
+      (n) => (n === cardName ? { ...effect, timing: t, timings: null } : getEffect(n)),
+      opts,
+    ));
+  }
+
   const timing = String(effect.timing).toLowerCase().trim();
   if (SPECIAL_ACTION_TIMING.has(timing)) return false;
 
@@ -961,7 +985,11 @@ function _maraFastLearnerSpecialBypass(ccName, dcName, game) {
 /** True if this DC can legally play this CC (for Special Action timing). */
 export function isCcPlayableByDc(ccName, dcName, displayName, hasDarksaber = false, extraKeywords = null, game = null) {
   const effect = getCcEffect(ccName);
-  if (!effect || (effect.timing || '').toLowerCase() !== 'specialaction') return false;
+  // A multi-window card counts here when ANY of its windows is a Special Action.
+  const _dcTimings = Array.isArray(effect?.timings) && effect.timings.length
+    ? effect.timings.map((t) => String(t).toLowerCase().trim())
+    : [String(effect?.timing || '').toLowerCase()];
+  if (!effect || !_dcTimings.includes('specialaction')) return false;
   if (ccPlayableByMatches((effect.playableBy || '').trim(), dcName, displayName, hasDarksaber, extraKeywords, game)) return true;
   // Mara Fast Learner bypass: surface unique-figure special-action CCs on
   // Mara's DC menu when FL is unused and the named figure is in army.

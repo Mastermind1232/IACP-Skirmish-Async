@@ -542,6 +542,28 @@ export function resolveAbility(abilityId, context) {
   // ccEffect: chooseOne — player must pick one option; when choiceIndex is provided, resolve that option
   if (entry.type === 'ccEffect' && Array.isArray(entry.chooseOne) && entry.chooseOne.length > 0) {
     let choiceIndex = context.choiceIndex;
+    // WINDOW-SCOPED OPTIONS. alexanbv 2026-08-24: "I can feel it can be played in
+    // three different windows. When played, you only get the ONE ability
+    // corresponding to the window in which it was played." So an option tagged
+    // with a `window` is only on the table when that window is the live one —
+    // this is NOT a free choice among all three. With exactly one option left it
+    // resolves without prompting, which is the normal case.
+    if (entry.chooseOne.some((o) => o.window)) {
+      const _cbt = context.combat || context.game?.combat || context.game?.pendingCombat;
+      const _pn = context.playerNum;
+      const _win = new Set();
+      if (_cbt && _pn) {
+        if (_cbt.attackerPlayerNum === _pn) _win.add('duringattack');
+        if (_cbt.defenderPlayerNum === _pn) _win.add('whiledefending');
+      }
+      // Played off the Deployment card button → the Special Action window.
+      if (!_cbt && context.fromDc !== false && context.msgId) _win.add('specialaction');
+      const _scoped = entry.chooseOne.filter((o) => !o.window || _win.has(o.window));
+      if (_scoped.length > 0 && _scoped.length < entry.chooseOne.length) {
+        entry = { ...entry, chooseOne: _scoped };
+        if (_scoped.length === 1) choiceIndex = 0;
+      }
+    }
     // affiliationDetermined (Reactive Loyalties): the option is NOT a player
     // choice — it's fixed by the playing army's affiliation (alexanbv audit
     // 2026-06-22: IMPERIAL/SCUM/REBEL). Auto-select the matching option by its
