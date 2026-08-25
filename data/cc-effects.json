@@ -12,7 +12,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. During this round, apply +5 Health to each of your WOOKIEES.",
-      "abilityId": "Adrenaline"
+      "abilityId": "Adrenaline",
+      "noRestrictionBox": true
     },
     "Advance Warning": {
       "cost": 0,
@@ -26,7 +27,8 @@
       "playableBy": "Any Figure",
       "timing": "endOfRound",
       "effect": "Use at the end of a round. If your opponent has at least 8 more VPs than you, choose up to 3 of your figures. Those figures become Focused.",
-      "abilityId": "Against the Odds"
+      "abilityId": "Against the Odds",
+      "noRestrictionBox": true
     },
     "All in a Day's Work": {
       "cost": 3,
@@ -75,7 +77,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if your affiliation is Rebel. Each player chooses up to 3 figures. Roll 1 red die. Each of those figures recovers Damage equal to the Hit results.",
-      "abilityId": "Balancing Force"
+      "abilityId": "Balancing Force",
+      "noRestrictionBox": true
     },
     "Ballistics Matrix": {
       "cost": 1,
@@ -203,7 +206,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. A friendly TROOPER with a figure cost of 4 or greater may interrupt to perform a move and an attack.",
-      "abilityId": "Call the Vanguard"
+      "abilityId": "Call the Vanguard",
+      "noRestrictionBox": true
     },
     "Camouflage": {
       "cost": 1,
@@ -239,21 +243,24 @@
       "playableBy": "Any Figure",
       "timing": "afterUniqueHostileDefeated",
       "effect": "Use after a unique hostile figure is defeated to gain 4 VPs.",
-      "abilityId": "Celebration"
+      "abilityId": "Celebration",
+      "noRestrictionBox": true
     },
     "Change of Plans": {
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "afterYouResolveGroupsActivation",
       "effect": "Use after you resolve a group's activation. Exhaust 1 of your Deployment cards to ready 1 other Deployment card of equal or lower Deployment cost that shares at least 1 trait.",
-      "abilityId": "Change of Plans"
+      "abilityId": "Change of Plans",
+      "noRestrictionBox": true
     },
     "Chaotic Force": {
       "cost": 2,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if your affiliation is SCUM. Each player chooses up to 3 figures. Roll 1 green die. Each of those figures suffers Strain equal to the Accuracy result.",
-      "abilityId": "Chaotic Force"
+      "abilityId": "Chaotic Force",
+      "noRestrictionBox": true
     },
     "Cheat to Win": {
       "cost": 1,
@@ -288,7 +295,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Each friendly BRAWLER may move up to 2 spaces. Then each friendly BRAWLER within 4 spaces of a hostile figure gains 1 Armor Token.",
-      "abilityId": "Close the Gap"
+      "abilityId": "Close the Gap",
+      "noRestrictionBox": true
     },
     "Collateral Damage": {
       "cost": 1,
@@ -302,7 +310,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if you have 1 or more SPIES on the map. Look at your opponent's hand of Command cards.",
-      "abilityId": "Collect Intel"
+      "abilityId": "Collect Intel",
+      "noRestrictionBox": true
     },
     "Combat Resupply": {
       "cost": 1,
@@ -316,7 +325,8 @@
       "playableBy": "Any Figure",
       "timing": "whenCommandCardPlayed",
       "effect": "Use when a Command card with a cost of X is played, where X is equal to or less than the number of friendly SPY groups on the map. Discard that card and cancel its effects.",
-      "abilityId": "Comm Disruption"
+      "abilityId": "Comm Disruption",
+      "noRestrictionBox": true
     },
     "Concentrated Fire": {
       "cost": 1,
@@ -337,7 +347,8 @@
       "playableBy": "IMPERIAL",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if your affiliation is IMPERIAL. Each player chooses up to 3 figures. Roll 1 blue die. Each of those figures suffers Damage equal to the Hit results.",
-      "abilityId": "Corrupting Force"
+      "abilityId": "Corrupting Force",
+      "noRestrictionBox": true
     },
     "Counter Attack": {
       "cost": 2,
@@ -351,7 +362,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of the round. Up to 3 friendly TROOPERS become Hidden. During this round, each of your TROOPERS gains: \n\n- Surge: Stun. If the target was already stunned, apply +2 Hits to the attack results.",
-      "abilityId": "Covering Fire"
+      "abilityId": "Covering Fire",
+      "noRestrictionBox": true
     },
     "Cripple": {
       "cost": 2,
@@ -385,7 +397,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if you have 30 or fewer VPs. You and your opponent each gain 3 VPs.",
-      "abilityId": "Dangerous Bargains"
+      "abilityId": "Dangerous Bargains",
+      "noRestrictionBox": true
     },
     "Dangerous Prey": {
       "cost": 1,
@@ -528,7 +541,8 @@
       "playableBy": "Any Figure",
       "timing": "afterDamage",
       "effect": "Use after a hostile figure with a BENEFICIAL condition suffers Damage. Discard 1 BENEFICIAL condition from that figure. Then, that figure suffers 2 Strain.",
-      "abilityId": "Disorient"
+      "abilityId": "Disorient",
+      "noRestrictionBox": true
     },
     "Double or Nothing": {
       "cost": 2,
@@ -570,7 +584,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Until the end of the round, each of your figures ignores additional movement point costs for difficult terrain and hostile figures.",
-      "abilityId": "Efficient Travel"
+      "abilityId": "Efficient Travel",
+      "noRestrictionBox": true
     },
     "Element of Surprise": {
       "cost": 0,
@@ -653,7 +668,8 @@
       "playableBy": "SCUM",
       "timing": "startOfRound",
       "effect": "Use at the start of a round if your affiliation is Scum. Each friendly figure that is carrying or controlling a crate or mission token may either recover 1 Damage, or gain 1 Block Token, or discard 1 HARMFUL condition.",
-      "abilityId": "Eye on the Prize"
+      "abilityId": "Eye on the Prize",
+      "noRestrictionBox": true
     },
     "Face Me!": {
       "cost": 1,
@@ -694,7 +710,8 @@
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "endOfRound",
-      "effect": "Use at the end of the round. Choose 1 of your or 1 of your opponent's CREATURES. Perform 1 attack with that figure."
+      "effect": "Use at the end of the round. Choose 1 of your or 1 of your opponent's CREATURES. Perform 1 attack with that figure.",
+      "noRestrictionBox": true
     },
     "Field Promotion": {
       "cost": 0,
@@ -834,7 +851,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Until the end of the round, each of your VEHICLES gains +1 Speed and applies +1 Evade to its defense results.",
-      "abilityId": "Fuel Upgrade"
+      "abilityId": "Fuel Upgrade",
+      "noRestrictionBox": true
     },
     "Furious Charge": {
       "cost": 2,
@@ -912,7 +930,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. Until the end of the round, figures on exterior spaces apply -1 Evade to their defense results, and figures not on exterior spaces apply +1 Block to their defense results.",
-      "abilityId": "Harsh Environment"
+      "abilityId": "Harsh Environment",
+      "noRestrictionBox": true
     },
     "Heart of Freedom": {
       "cost": 2,
@@ -1037,7 +1056,8 @@
       "playableBy": "Any Figure",
       "timing": "endOfRound",
       "effect": "Use at the end of a round to choose a \"Tusken Raider\" or \"Bantha Rider\" figure. The chosen figure gains 2 movement points and may interrupt to perform an attack or Special Action.",
-      "abilityId": "Jundland Terror"
+      "abilityId": "Jundland Terror",
+      "noRestrictionBox": true
     },
     "Just Business": {
       "cost": 1,
@@ -1099,7 +1119,8 @@
       "playableBy": "Any Figure",
       "timing": "whenCommandCardPlayed",
       "effect": "Use after your opponent plays a Command card with a cost of 0. Discard that card and cancel its effects.",
-      "abilityId": "Negation"
+      "abilityId": "Negation",
+      "noRestrictionBox": true
     },
     "Marksman": {
       "cost": 1,
@@ -1142,7 +1163,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round to claim the initiative token. Then exhaust 1 of your Deployment cards.",
-      "abilityId": "Take Initiative"
+      "abilityId": "Take Initiative",
+      "noRestrictionBox": true
     },
     "Urgency": {
       "cost": 0,
@@ -1216,7 +1238,8 @@
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round to choose up to 2 figures. Each of those figures discards each of its conditions, then gains 1 Hit Token for each condition discarded this way."
+      "effect": "Use at the start of a round to choose up to 2 figures. Each of those figures discards each of its conditions, then gains 1 Hit Token for each condition discarded this way.",
+      "noRestrictionBox": true
     },
     "Inspiring Speech": {
       "cost": 2,
@@ -1305,7 +1328,8 @@
       "playableBy": "Any Figure",
       "timing": "whenOneOfYourFiguresDefeated",
       "effect": "Use when one of your non-unique figures is defeated. That figure is worth 4 fewer VPs, to a minimum of 0.",
-      "abilityId": "Of No Importance"
+      "abilityId": "Of No Importance",
+      "noRestrictionBox": true
     },
     "Officer's Training": {
       "cost": 0,
@@ -1359,7 +1383,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. During this round, each of your DROIDS may suffer 2 Damage during its activation to perform 1 additional action. Limit once per DROID.",
-      "abilityId": "Overdrive"
+      "abilityId": "Overdrive",
+      "noRestrictionBox": true
     },
     "Overheated": {
       "cost": 1,
@@ -1488,7 +1513,8 @@
       "playableBy": "Any Figure",
       "timing": "afterYouResolveGroupsActivation",
       "effect": "Use after you resolve an activation to choose a hostile figure adjacent to one of your TROOPERS or GUARDIANS. That figure's group must activate next if able.",
-      "abilityId": "Provoke"
+      "abilityId": "Provoke",
+      "noRestrictionBox": true
     },
     "Pummel": {
       "cost": 1,
@@ -1564,7 +1590,8 @@
       "cost": 2,
       "playableBy": "TROOPER",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. Choose 1 of your defeated TROOPERS that has a reinforcement cost of 3 or less. Place that figure adjacent to any other figure of its group."
+      "effect": "Use at the start of a round. Choose 1 of your defeated TROOPERS that has a reinforcement cost of 3 or less. Place that figure adjacent to any other figure of its group.",
+      "noRestrictionBox": true
     },
     "Repair": {
       "cost": 2,
@@ -1585,7 +1612,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Put this card into play at the start of a round.\n\nPlayers cannot choose, play, or re-draw Command cards in discard piles.\n\nAt the end of the round, discard this card and draw 1 Command card.",
-      "abilityId": "Rest in Peace"
+      "abilityId": "Rest in Peace",
+      "noRestrictionBox": true
     },
     "Retaliation": {
       "cost": 1,
@@ -1658,7 +1686,8 @@
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round and choose a map tile. At the end of the round, choose one of your figures on that tile to interrupt to perform an attack targeting a hostile figure on that tile."
+      "effect": "Use at the start of a round and choose a map tile. At the end of the round, choose one of your figures on that tile to interrupt to perform an attack targeting a hostile figure on that tile.",
+      "noRestrictionBox": true
     },
     "Set for Stun": {
       "cost": 0,
@@ -1690,7 +1719,8 @@
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Put this card into play at the start of a round. (Play area in your discord channel)\n\n------\n\nWhen any player plays a Command card, discard that card and cancel its effects. Then, discard this card."
+      "effect": "Put this card into play at the start of a round. (Play area in your discord channel)\n\n------\n\nWhen any player plays a Command card, discard that card and cancel its effects. Then, discard this card.",
+      "noRestrictionBox": true
     },
     "Single Purpose": {
       "cost": 1,
@@ -1704,7 +1734,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. You do not activate any groups this round until you have more ready Deployment cards than your opponent.",
-      "abilityId": "Sit Tight"
+      "abilityId": "Sit Tight",
+      "noRestrictionBox": true
     },
     "Slippery Target": {
       "cost": 2,
@@ -1752,7 +1783,8 @@
       "playableBy": "Any Figure",
       "timing": "afterYouResolveGroupsActivation",
       "effect": "Use after activating a group. You may immediately activate another ready group with the same name. The combined cost of both groups cannot exceed 15.",
-      "abilityId": "Squad Swarm"
+      "abilityId": "Squad Swarm",
+      "noRestrictionBox": true
     },
     "Stall for Time": {
       "cost": 0,
@@ -1804,7 +1836,8 @@
       "playableBy": "Any Figure",
       "timing": "afterYouResolveGroupsActivation",
       "effect": "Use after you resolve a group's activation. You may immediately activate another group. The combined deployment cost of these groups cannot exceed 12.",
-      "abilityId": "Strength in Numbers"
+      "abilityId": "Strength in Numbers",
+      "noRestrictionBox": true
     },
     "Stroke of Brilliance": {
       "cost": 0,
@@ -1943,7 +1976,8 @@
       "playableBy": "Any Figure",
       "timing": "startOfRound",
       "effect": "Use at the start of a round. During this round, each friendly Jawa Scavenger gains +1 Speed, +1 Accuracy, and \n- Surge: If you are attacking a figure, gain 1 VP.",
-      "abilityId": "Utinni!"
+      "abilityId": "Utinni!",
+      "noRestrictionBox": true
     },
     "Vanish": {
       "cost": 2,
@@ -2010,7 +2044,9 @@
       "cost": 2,
       "playableBy": "Fifth Brother",
       "timing": "other",
-      "effect": "When this card is discarded, place it on your 'Fifth Brother' Deployment card.\n\nYou cannot be defeated. You ignore your Harmful conditions.\n\nWhen a hostile figure is defeated, recover 2 Damage and return this card to the game box."
+      "effect": "When this card is discarded, place it on your 'Fifth Brother' Deployment card.\n\nYou cannot be defeated. You ignore your Harmful conditions.\n\nWhen a hostile figure is defeated, recover 2 Damage and return this card to the game box.",
+      "noRestrictionBox": true
     }
-  }
+  },
+  "_meta_noRestrictionBox": "Cards with NO restriction box are not played by a figure (alexanbv 2026-08-24). Verified card by card from the images 2026-08-24; the playableBy field cannot express this, because every unrestricted card is stored as 'Any Figure' whether it carries an 'Any Figure' box or no box at all."
 }
