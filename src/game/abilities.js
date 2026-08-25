@@ -175,6 +175,7 @@ import { getFigureSize, getDcStats } from '../data-loader.js';
 import { getDamageableObjectsAtCoord, getDamageableObjectsWithinN, isObjectAlive, applyObjectDamageSync } from './object-damage-pipeline.js';
 import { checkDeckDiscardPassiveRedraws, fireCcDiscarded } from './cc-passive-redraw.js';
 import { getUniqueFiguresForCc, getCcPlayerOptions } from './unique-figure-ccs.js';
+import { isLureControlled } from './lure-isolation.js';
 import { ADAPTIVE_SKILLS_ABILITY_ID, firstSeenArmyAffiliation } from './adaptive-skills-helpers.js';
 
 /**
@@ -14663,6 +14664,11 @@ export function resolveAbility(abilityId, context) {
     const validLabels = [];
     for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
       if (!pos || actKeys.includes(fk)) continue;
+      // A Lure-controlled figure is not friendly to anyone (alexanbv 2026-08-24:
+      // "for CC, an example would be Battlefield Awareness, as the controlled
+      // figure is NOT friendly"). It stays in its OWNER's figurePositions while
+      // controlled, so the owner's enumeration is exactly what must skip it.
+      if (isLureControlled(game, fk)) continue;
       if (actPos && countGameSpaces(game, actPos, pos) > 3) continue;
       validKeys.push(fk); validLabels.push(dcNameFromFigureKey(fk));
     }
