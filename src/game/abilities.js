@@ -13144,14 +13144,21 @@ export function resolveAbility(abilityId, context) {
     const anchorFk = resolveRoundModifierAnchor(game, playerNum, cardName || 'Field Supply', { dcMessageMeta });
     const actKeys = anchorFk ? [anchorFk] : [];
     const actPos = anchorFk ? game.figurePositions?.[playerNum]?.[anchorFk] : null;
-    // Enumerate eligible OTHER friendly figures within 3 (excluding already-picked).
+    // Enumerate eligible OTHER figures within 3 (excluding already-picked).
+    // The card says "Up to 2 OTHER figures within 3 spaces of you", not "friendly"
+    // — and its very next sentence does say friendly, so the omission is
+    // deliberate. alexanbv 2026-08-24: "field supply is technically anyone, but
+    // no one gives enemy figures tokens." Hostiles are therefore offered; nobody
+    // will pick one, but the menu now matches the card.
     const _enumEligible = () => {
       const picked = new Set(game._fieldSupplyPicks || []);
       const out = [];
-      for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
-        if (!pos || actKeys.includes(fk) || picked.has(fk)) continue;
-        if (actPos && countGameSpaces(game, actPos, pos) > 3) continue;
-        out.push(fk);
+      for (const _fsPn of [playerNum, opponentPlayerNum(playerNum)]) {
+        for (const [fk, pos] of Object.entries(game.figurePositions?.[_fsPn] || {})) {
+          if (!pos || actKeys.includes(fk) || picked.has(fk)) continue;
+          if (actPos && countGameSpaces(game, actPos, pos) > 3) continue;
+          out.push(fk);
+        }
       }
       return out;
     };

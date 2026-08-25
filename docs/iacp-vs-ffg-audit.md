@@ -440,7 +440,7 @@ Guarded by `tests/domain/oracle/cc-interrupt-window-declaration.test.js`.
 | Feral Swipes | (LFL/FFG) | matches, including the printed melee icon |
 
 | Ferocity | (LFL/FFG) | matches |
-| Field Supply | (LFL/FFG) | text matches. **OPEN:** the card says "Up to 2 **other figures** within 3 spaces", not "friendly". The resolver offers friendlies only. Practically nobody hands an enemy a token, so the impact is nil, but it is a divergence — raised with alexanbv rather than changed. |
+| Field Supply | (LFL/FFG) | matches. The card says "Up to 2 **other figures** within 3 spaces", not "friendly", and its next sentence does say friendly, so the omission is deliberate. alexanbv 2026-08-24: "field supply is technically anyone, but no one gives enemy figures tokens." The picker offered friendlies only; it now offers any figure within 3. |
 | Field Tactician | (LFL/FFG) | matches |
 | Fleet Footed | (LFL/FFG) | matches |
 | Flurry of Blades | (LFL/FFG) | matches, including the double Special Action arrow |
