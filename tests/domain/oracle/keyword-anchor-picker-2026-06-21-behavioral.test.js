@@ -3,21 +3,28 @@
  *
  * Designer rule: whenever an ability could affect/select among multiple figures
  * it must ask WHICH one. Just Business ("friendly Scum within 3 of YOU gain
- * Professional") is playableBy LEADER — "you" is the LEADER who plays it. With
- * 2+ LEADER figures on the board the player must choose which one anchors the
- * range; with one it auto-anchors.
+ * Professional") — "you" is the LEADER who plays it. With 2+ eligible LEADER
+ * figures on the board the player must choose which one anchors the range; with
+ * one it auto-anchors.
+ *
+ * The card is a SCUM Leader card (alexanbv 2026-08-24: "Just business needs to
+ * be a scum leader" — its band reads "[Scum] Leader"). This file previously used
+ * any LEADER at all, which passed only because our data had dropped the Scum
+ * half of the restriction.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getKeywordAnchorPlayerOptions } from '../../../src/game/unique-figure-ccs.js';
 import { getDcEffects } from '../../../src/data-loader.js';
 
-// Two real LEADER deployment figures for a fake board.
+// Real SCUM LEADER deployment figures for a fake board — Just Business is a
+// Scum Leader card, so a Rebel or Imperial Leader is not eligible to anchor it.
 function leaderDcNames(n) {
   const eff = getDcEffects();
   return Object.entries(eff)
     .filter(([name, e]) =>
       !name.startsWith('[') && // exclude upgrades/attachments
+      e.affiliation === 'Scum' &&
       (e.keywords || []).map((k) => String(k).toLowerCase()).includes('leader'))
     .map(([name]) => name)
     .slice(0, n);

@@ -403,7 +403,20 @@ export function getCcPlayerOptions(game, playerNum, cardName, opts = {}) {
     });
   };
 
-  for (const fk of liveKeys) {
+  // Lure of the Dark Side: while you control a hostile figure you may play cards
+  // FOR it. alexanbv 2026-08-24: "a player can play CCs for a figure that is
+  // being controlled by Lure of the Dark Side. However, only CCs that the
+  // controlled figure can play itself are eligible."
+  //
+  // So the controlled figure joins the candidates, and its eligibility is judged
+  // against ITS OWN card — not the controller's army. The enablers below are
+  // deliberately not extended to it: Fast Learner, There is Another and A New
+  // Hope belong to your army, not to a figure you have borrowed.
+  const _lure = game?.pendingLure;
+  const _lureFk = (_lure && _lure.controllerPlayerNum === playerNum) ? _lure.controlledFigureKey : null;
+  const candidates = _lureFk ? [...liveKeys, _lureFk] : liveKeys;
+
+  for (const fk of candidates) {
     const dcName = dcNameFromFigureKey(fk);
     const extraKeywords = getExtraKeywords ? getExtraKeywords(game, playerNum, dcName) : null;
     const darksaber = hasDarksaberFor ? !!hasDarksaberFor(game, playerNum, dcName) : false;

@@ -1061,7 +1061,7 @@
     },
     "Just Business": {
       "cost": 1,
-      "playableBy": "LEADER",
+      "playableBy": "SCUM LEADER",
       "timing": "startOfRound",
       "effect": "Use at the start of the round. During this round, friendly Scum figures gain 'Professional' while within 3 spaces of you. (Those figures may reroll 1 attack die while attacking.)",
       "abilityId": "Just Business"

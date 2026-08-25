@@ -89,3 +89,84 @@ describe('the per-figure gate understands affiliation at all', () => {
     assert.equal(figureMatchesCcRestriction(g, 'Cal Kestis', 'Cal Kestis', 'REBEL TROOPER'), false);
   });
 });
+
+describe('Just Business is a SCUM Leader card', () => {
+  // alexanbv 2026-08-24: "Just business needs to be a scum leader." Its band
+  // reads "[Scum] Leader"; we stored plain LEADER, so a Rebel or Imperial Leader
+  // could play it. Found while checking every card for a restriction band.
+  const armyOf = (names) => {
+    const dcs = names.map((n) => ({ dcName: n }));
+    return {
+      gameId: 'g',
+      p1DcList: dcs,
+      p1DcMessageIds: dcs.map((_, i) => `m${i}`),
+      figurePositions: { 1: Object.fromEntries(dcs.map((d, i) => [`${d.dcName}-${i + 1}-0`, 'e19'])) },
+    };
+  };
+
+  it('a Scum LEADER may play it', () => {
+    const g = armyOf(['Cad Bane']);
+    assert.deepEqual(getCcPlayerOptions(g, 1, 'Just Business').map((o) => o.dcName), ['Cad Bane']);
+  });
+
+  it('a Rebel LEADER may not', () => {
+    const g = armyOf(['Cassian Andor']);
+    assert.deepEqual(getCcPlayerOptions(g, 1, 'Just Business'), []);
+  });
+
+  it('with both in the army, only the Scum LEADER is offered', () => {
+    const g = armyOf(['Cad Bane', 'Cassian Andor']);
+    assert.deepEqual(getCcPlayerOptions(g, 1, 'Just Business').map((o) => o.dcName), ['Cad Bane']);
+  });
+});
+
+describe('Lure of the Dark Side: you may play cards for the figure you control', () => {
+  // alexanbv 2026-08-24: "a player can play CCs for a figure that is being
+  // controlled by Lure of the Dark Side. However, only CCs that the controlled
+  // figure can play itself are eligible."
+  const MINE = 'Cad Bane-1-0';       // ours, a Scum LEADER
+  const CONTROLLED = 'Darth Vader-1-0'; // theirs, controlled by us this attack
+
+  const lureGame = () => ({
+    gameId: 'g',
+    p1DcList: [{ dcName: 'Cad Bane' }],
+    p1DcMessageIds: ['m0'],
+    p2DcList: [{ dcName: 'Darth Vader' }],
+    p2DcMessageIds: ['m1'],
+    figurePositions: { 1: { [MINE]: 'e19' }, 2: { [CONTROLLED]: 'e20' } },
+    pendingLure: {
+      controllerPlayerNum: 1,
+      controlledFigureKey: CONTROLLED,
+      controlledPlayerNum: 2,
+    },
+  });
+
+  it("offers the controlled figure for its OWN card", () => {
+    // Lord of the Sith names Darth Vader. We do not own him, but we control him.
+    const opts = getCcPlayerOptions(lureGame(), 1, 'Lord of the Sith');
+    assert.deepEqual(opts.map((o) => o.dcName), ['Darth Vader']);
+  });
+
+  it('does NOT offer him a card he could not play himself', () => {
+    // Just Business is a Scum LEADER card. Vader is neither.
+    const opts = getCcPlayerOptions(lureGame(), 1, 'Just Business');
+    assert.deepEqual(opts.map((o) => o.dcName), ['Cad Bane']);
+    assert.ok(!opts.some((o) => o.figureKey === CONTROLLED));
+  });
+
+  it('offers nothing extra once the control ends', () => {
+    const g = lureGame();
+    delete g.pendingLure;
+    assert.deepEqual(getCcPlayerOptions(g, 1, 'Lord of the Sith'), [],
+      'without the Lure, his card is not ours to play');
+  });
+
+  it('only the CONTROLLER gets the borrowed figure', () => {
+    // Keyed to controllerPlayerNum. If player 2 were the one controlling, player
+    // 1 must not pick up their figure as a candidate.
+    const g = lureGame();
+    g.pendingLure.controllerPlayerNum = 2;
+    assert.deepEqual(getCcPlayerOptions(g, 1, 'Lord of the Sith'), [],
+      'a Lure we are not running gives us nothing');
+  });
+});
