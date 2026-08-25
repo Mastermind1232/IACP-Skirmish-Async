@@ -430,6 +430,15 @@ Dirty Trick included, and anything added to `INTERRUPT_CARD_BY_TYPE` later.
 
 Guarded by `tests/domain/oracle/cc-interrupt-window-declaration.test.js`.
 
+| Espionage Mastery | (LFL/FFG) | matches |
+| Etiquette and Protocol | (LFL/FFG) | matches |
+| Evacuate | (LFL/FFG) | matches |
+| Explosive Weaponry | (LFL/FFG) | matches |
+| Extra Protection | (LFL/FFG) | matches. **Its log told the player a rule that does not exist**, instructing them to "perform an attack targeting the figure who attacked you". The card does not restrict the target. Advisory text only, not enforced, but it would have people playing it wrong. Corrected. |
+| Face to Face | (LFL/FFG) | **BEHAVIOURAL DRIFT, FIXED 2026-08-24.** `overrideAttackType: "Melee"` forced the attack to be Melee. The card says "perform an attack targeting an adjacent figure or object" and does NOT say Melee — Feral Swipes prints the melee icon on the same sheet and Face to Face does not. A BRAWLER with a Ranged attack was being made to roll the wrong dice. |
+| Fatal Deception | (LFL/FFG) | matches |
+| Feral Swipes | (LFL/FFG) | matches, including the printed melee icon |
+
 ### Stale library labels are worth fixing
 
 `entry.label` is not dead metadata: it surfaces to players in manual-resolve
@@ -549,7 +558,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**128 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**136 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and

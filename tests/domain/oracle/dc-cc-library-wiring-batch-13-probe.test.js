@@ -23,7 +23,11 @@ const BATCH = [
   ['Espionage Mastery',     ['returnDiscardToHand', 'draw']],
   ['Expose Weakness',       ['nextAttackBonusPierce']],
   ['Extra Protection',      ['mpBonus', 'freeAttackBonus']],
-  ['Face to Face',          ['mpBonus', 'freeAttackBonus', 'overrideAttackType']],
+  // overrideAttackType removed 2026-08-24: the card reads "perform an attack
+  // targeting an adjacent figure or object" and does NOT say Melee. Feral Swipes
+  // prints the melee icon; Face to Face does not, so forcing Melee was changing
+  // which dice a Brawler with a Ranged attack rolls.
+  ['Face to Face',          ['mpBonus', 'freeAttackBonus']],
   ['Fatal Deception',       ['falseOrdersUpgrade']],
   ['Final Stand',           ['powerTokenGain', 'freeAttackBonus', 'selfDefeatsAfterAttack', 'mpBonus']],
   ['Flurry of Blades',      ['freeAttackBonus']],

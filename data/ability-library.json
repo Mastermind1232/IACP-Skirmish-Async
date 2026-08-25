@@ -1719,9 +1719,9 @@
     },
     "Extra Protection": {
       "type": "ccEffect",
-      "label": "Gain 2 MP + free attack",
+      "label": "Move up to 2 spaces, then a free attack (any legal target)",
       "mpBonus": 2,
-      "logMessage": "Gained **2 MP**. Perform an attack targeting the figure who attacked you (use Attack button and select the attacker as your target).",
+      "logMessage": "Gained **2 MP**. Then perform an attack — the card does not restrict the target (use the Attack button).",
       "wiredStatus": "wired",
       "freeAttackBonus": true
     },
@@ -1733,13 +1733,12 @@
     },
     "Face to Face": {
       "type": "ccEffect",
-      "label": "Move up to 2 spaces, then free Melee attack on adjacent hostile",
+      "label": "Move up to 2 spaces, then a free attack on an adjacent figure or object",
       "mpBonus": 2,
       "isMoveX": true,
-      "logMessage": "May move up to 2 spaces, then perform a Melee attack targeting an adjacent figure without spending an action.",
+      "logMessage": "May move up to 2 spaces, then perform an attack targeting an adjacent figure or object without spending an action.",
       "wiredStatus": "wired",
-      "freeAttackBonus": true,
-      "overrideAttackType": "Melee"
+      "freeAttackBonus": true
     },
     "fallen_master_malicos": {
       "type": "dcSpecial",
