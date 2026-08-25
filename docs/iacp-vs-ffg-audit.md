@@ -461,6 +461,15 @@ Guarded by `tests/domain/oracle/cc-interrupt-window-declaration.test.js`.
 | Heavy Ordnance | (LFL/FFG) | matches, including the object clause |
 | Heightened Reflexes | (LFL/FFG) | matches |
 
+| Force Lightning | (LFL/FFG) | matches; band reads "[Imperial] Force User" and we store IMPERIAL FORCE USER |
+| Fuel Upgrade | (LFL/FFG) | matches |
+| Harsh Environment | (LFL/FFG) | matches |
+| Heart of Freedom | (LFL/FFG) | matches; band reads "Any [Rebel] Figure" |
+| Hidden Trap | (LFL/FFG) | matches |
+| Hide in Plain Sight | (LFL/FFG) | matches |
+| Hit and Run | (LFL/FFG) | matches |
+| Hold Ground | (LFL/FFG) | matches |
+
 ### Stale library labels are worth fixing
 
 `entry.label` is not dead metadata: it surfaces to players in manual-resolve
@@ -580,7 +589,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**156 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**164 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and
