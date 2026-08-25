@@ -452,6 +452,15 @@ Guarded by `tests/domain/oracle/cc-interrupt-window-declaration.test.js`.
 | Force Surge | (LFL/FFG) | matches |
 | Foresee | (LFL/FFG) | matches |
 
+| Forward March | (LFL/FFG) | matches |
+| Furious Charge | (LFL/FFG) | matches; its play-time gate was corrected separately (see the defender-identity section) |
+| Glory of the Kill | (LFL/FFG) | matches |
+| Grenadier | (LFL/FFG) | matches, including "each figure" rather than each hostile |
+| Grisly Contest | (LFL/FFG) | matches |
+| Heavy Armor | (LFL/FFG) | matches |
+| Heavy Ordnance | (LFL/FFG) | matches, including the object clause |
+| Heightened Reflexes | (LFL/FFG) | matches |
+
 ### Stale library labels are worth fixing
 
 `entry.label` is not dead metadata: it surfaces to players in manual-resolve
@@ -571,7 +580,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**148 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**156 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and
