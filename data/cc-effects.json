@@ -1185,7 +1185,7 @@
       "effect": "Special Action: Choose up to 3 hostile figures adjacent to you. Each chosen figure suffers 1 Damage for each Damage you have suffered, to a maximum of 3 Damage."
     },
     "Mandalorian Tactics": {
-      "cost": 3,
+      "cost": 2,
       "playableBy": "Boba Fett",
       "timing": "duringActivation",
       "effect": "Use during your activation to choose 1 of the following:\n- Gain 4 movement points\n- Perform an attack without spending an action",

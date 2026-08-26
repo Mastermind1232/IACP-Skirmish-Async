@@ -522,6 +522,39 @@ Guarded by `tests/domain/oracle/cc-i-can-feel-it-windows.test.js`.
 | Take Cover | (LFL/FFG) | matches |
 | Take Initiative | (LFL/FFG) | matches |
 
+| Urgency | (LFL/FFG) | matches |
+| Mandalorian Tactics | IACP Approved | **COST DRIFT, FIXED 2026-08-25.** Card costs **2**; we stored 3. First cost error found in the sweep. |
+| Opportunistic | (LFL/FFG) | matches |
+| Shoot the Messenger | (LFL/FFG) | matches |
+
+### The audit tooling was reading superseded cards
+
+Six cards ship BOTH an FFG original and an IACP reissue:
+Assassinate, Cavalry Charge, Covering Fire, Expose Weakness, Stimulants,
+Wookiee Rage. The values differ — **Cavalry Charge costs 2 on the FFG card and 1
+on the IACP one**.
+
+My contact-sheet tooling resolved filenames by trying the plain name before the
+`(IACP)` one, so for those six it was reading the superseded card. It reported
+Cavalry Charge as a cost drift that does not exist.
+
+Fixed: all three tools now prefer the `(IACP)` variant, which is what alexanbv's
+ground-truth rule requires. All six were then re-read against their IACP images —
+cost, text and restriction band — and all six are correct as stored. Stimulants
+and Wookiee Rage are additionally on the exception list, and their stored text
+correctly follows alexanbv's rulings rather than their printed images.
+
+Worth recording as a method note: a tool that silently picks the wrong source
+produces confident, wrong findings. This one would have had me "correct" a card
+that was already right.
+
+### Cost verification
+
+Costs are now checked in bulk by cropping the cost badge of each card and
+stacking a dozen at a time with the STORED value printed beside each, so a
+mismatch is visible without cross-referencing. That is how Mandalorian Tactics
+turned up.
+
 ### Stale library labels are worth fixing
 
 `entry.label` is not dead metadata: it surfaces to players in manual-resolve
@@ -641,7 +674,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**180 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**184 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and
