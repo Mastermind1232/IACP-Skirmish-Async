@@ -548,12 +548,22 @@ Worth recording as a method note: a tool that silently picks the wrong source
 produces confident, wrong findings. This one would have had me "correct" a card
 that was already right.
 
-### Cost verification
+### Cost verification: COMPLETE, all 292 Command cards (2026-08-26)
 
-Costs are now checked in bulk by cropping the cost badge of each card and
-stacking a dozen at a time with the STORED value printed beside each, so a
-mismatch is visible without cross-referencing. That is how Mandalorian Tactics
-turned up.
+Every CC's printed cost checked against `cc-effects.json`. Method: crop the cost
+badge, stack a dozen per image with the STORED value printed beside each, so a
+mismatch is visible at a glance rather than depending on recall.
+
+**One error in 292: Mandalorian Tactics**, printed at 2 and stored as 3. Fixed.
+
+That is a reassuring result for the data as a whole, and it also bounds the
+problem: whatever else is wrong with the card data, it is not the costs. Worth
+recording because a clean sweep is evidence, not wasted effort — it means the
+drift found elsewhere (restrictions, token faces, timing windows, effect text) is
+where attention belongs.
+
+Re-verified after the tooling fix below, so the six dual-image cards were read
+from their IACP versions.
 
 ### Stale library labels are worth fixing
 
