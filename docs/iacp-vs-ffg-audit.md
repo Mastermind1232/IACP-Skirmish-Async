@@ -565,6 +565,11 @@ where attention belongs.
 Re-verified after the tooling fix below, so the six dual-image cards were read
 from their IACP versions.
 
+| I Must Go Alone | (LFL/FFG) | matches. Its band prints the Rebel starbird before the name, which we do not store — but the card is restricted to **Obi-Wan Kenobi**, who is Rebel and unique, so the faction icon adds nothing that the name does not already enforce. Cosmetic, unlike Force Push and Just Business where the faction icon sat on a KEYWORD and genuinely narrowed who could play it. |
+| Improvised Weapons | (LFL/FFG) | matches, including the Ranged icon and the no-abilities clause |
+| In the Shadows | (LFL/FFG) | matches |
+| Induce Rage | (LFL/FFG) | matches; "up to 2 figures" is either side, and the resolver agrees |
+
 ### Stale library labels are worth fixing
 
 `entry.label` is not dead metadata: it surfaces to players in manual-resolve
@@ -684,7 +689,7 @@ Pummel) print the double arrow and are correctly distinct.
 `data/cc-verified.json` records only 3 cards as verified: Mandalorian Steel,
 Stimulants, Wookiee Rage.
 
-**184 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
+**188 of ~580 checked.** Drifts so far: Smoke Grenade (three live drifts, fixed),
 the Power Token faces on Eye on the Prize and Gauntlet Blade (live, fixed) and on
 Marked Territory (text only, fixed), Ambush (text only, fixed), Reverse
 Engineer's dropped Surge qualifier (text only, fixed), the Eye/Eyes and
