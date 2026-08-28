@@ -570,6 +570,35 @@ from their IACP versions.
 | In the Shadows | (LFL/FFG) | matches |
 | Induce Rage | (LFL/FFG) | matches; "up to 2 figures" is either side, and the resolver agrees |
 
+### Mara Jade takes her list's affiliation (fixed 2026-08-28)
+
+alexanbv: "mara Jades affiliation matches the list affiliation. Mara jade may
+only play unique CC of figure matching her affiliation. So if the list contains a
+unique figure that doesn't match the affiliation of the list, Mara may not play
+this card", and "This also applies to faction restricted cards like HoF PoG Worth
+every credit etc".
+
+Her Deployment card prints affiliation **"Any"**, which is correct for
+deck-building and useless for this rule: there was nothing to compare against.
+That produced two live bugs pointing in OPPOSITE directions, which is why neither
+looked obviously wrong on its own.
+
+| | was | now |
+|---|---|---|
+| Fast Learner, borrowing a unique figure's card | offered her EVERY unique-figure card in the game — a Rebel hero's card in an Imperial list included | only cards whose named figure matches the list's affiliation |
+| Faction-restricted cards (Heart of Freedom, Price of Glory, Worth Every Credit) | offered her NONE of them, because "any" matches no faction | she satisfies her list's faction |
+
+Fixed with one idea rather than two patches: a figure printed "Any" takes the
+LIST's affiliation. `effectiveFigureAffiliation` applies that to the per-figure
+restriction check, so faction-restricted cards work; `uniqueCcFigureAffiliation`
+reads the card side, so Fast Learner can compare them.
+
+A list with no affiliation at all (Mara alone, everything "Any") correctly offers
+her nothing — there is no faction to inherit.
+
+Guarded by `tests/domain/oracle/cc-mara-affiliation.test.js`, using real cards on
+both sides of the line. Both halves confirmed non-vacuous.
+
 ### Stale library labels are worth fixing
 
 `entry.label` is not dead metadata: it surfaces to players in manual-resolve

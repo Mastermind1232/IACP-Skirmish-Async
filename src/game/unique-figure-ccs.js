@@ -17,6 +17,7 @@ import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
 import { getDcEffects, getCcEffect } from '../data-loader.js';
 import { dcNameFromFigureKey } from './dc-helpers.js';
 import { aNewHopeAvailable, figureMatchesCcRestriction, hasDarksaberImperial, _getProgrammingOverrideKeywords } from './cc-timing.js';
+import { firstSeenArmyAffiliation } from './adaptive-skills-helpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -245,6 +246,13 @@ export function getUniqueCcPlayerOptions(game, playerNum, cardName) {
       continue;
     }
     if (!flBlocked && _figureIsFastLearner(fk)) {
+      // Fast Learner is faction-bound (alexanbv 2026-08-28). Mara counts as her
+      // LIST's affiliation, and may only borrow a unique figure's card when that
+      // figure's faction symbol matches. A Rebel hero sitting in an Imperial list
+      // does not lend her its card.
+      const _flAff = effectiveFigureAffiliation(game, playerNum, dcNameFromFigureKey(fk));
+      const _cardAff = uniqueCcFigureAffiliation(cardName);
+      if (_flAff && _cardAff && _flAff !== _cardAff) continue;
       const flUsed = !!game.roundFigureAbilityUsed?.[`${dcNameFromFigureKey(fk)}_fast_learner`];
       if (!flUsed) { add(fk, 'fast_learner', 'fast_learner'); continue; }
       // FL already used this round: Mara may still play it for free via TIA if
@@ -374,6 +382,42 @@ export function fallenMasterWaivesFactionFor(game, playerNum, figureKey) {
  *
  * @returns {Array<{figureKey, dcName, displayName, kind, consume}>}
  */
+/**
+ * The affiliation a figure counts as for Command-card purposes.
+ *
+ * alexanbv 2026-08-28: "mara Jades affiliation matches the list affiliation.
+ * Mara jade may only play unique CC of figure matching her affiliation", and
+ * "This also applies to faction restricted cards like HoF PoG Worth every credit
+ * etc".
+ *
+ * Mara's own card prints affiliation "Any", which is correct for deck-building
+ * and useless for this rule — there was nothing to compare against, so she was
+ * offered every unique-figure card in the game regardless of faction. Anyone
+ * printed "Any" therefore takes the LIST's affiliation.
+ */
+export function effectiveFigureAffiliation(game, playerNum, dcName) {
+  const eff = getDcEffects() || {};
+  const base = String(dcName || '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+  const own = String((eff[dcName] || eff[base] || {}).affiliation || '').toLowerCase();
+  if (own && own !== 'any') return own;
+  const list = (playerNum === 1 ? game?.p1DcList : game?.p2DcList) || [];
+  return firstSeenArmyAffiliation(list, eff);
+}
+
+/** The affiliation of the unique figure a card names, or null. */
+export function uniqueCcFigureAffiliation(cardName) {
+  const entry = getUniqueFigureCcEntry(cardName);
+  if (!entry) return null;
+  const figs = entry.figures || (entry.figure ? [entry.figure] : []);
+  const eff = getDcEffects() || {};
+  for (const f of figs) {
+    const d = eff[f] || eff[`${f} (Elite)`] || eff[`${f} (Regular)`];
+    const aff = String(d?.affiliation || '').toLowerCase();
+    if (aff && aff !== 'any') return aff;
+  }
+  return null;
+}
+
 export function getCcPlayerOptions(game, playerNum, cardName, opts = {}) {
   // Defaults wired to the real helpers so callers cannot forget them and
   // silently lose Programming Override's granted keywords or the Darksaber.
@@ -422,7 +466,7 @@ export function getCcPlayerOptions(game, playerNum, cardName, opts = {}) {
     const darksaber = hasDarksaberFor ? !!hasDarksaberFor(game, playerNum, dcName) : false;
     const factionWaived = darksaber || fallenMasterWaivesFactionFor(game, playerNum, fk);
     if (figureMatchesCcRestriction(game, dcName, dcName, playableBy, {
-      hasDarksaber: factionWaived, extraKeywords,
+      hasDarksaber: factionWaived, extraKeywords, playerNum,
     })) {
       add(fk, 'restriction', 'none');
     }

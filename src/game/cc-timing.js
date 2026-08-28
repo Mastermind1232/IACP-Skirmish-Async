@@ -30,7 +30,7 @@ export function depleteANewHope(game, playerNum) {
   return true;
 }
 import { countGameSpaces } from './board-helpers.js';
-import { ADAPTIVE_SKILLS_ABILITY_ID } from './adaptive-skills-helpers.js';
+import { ADAPTIVE_SKILLS_ABILITY_ID, firstSeenArmyAffiliation } from './adaptive-skills-helpers.js';
 import { getUniqueFigureCcEntry, getUniqueCcPlayerOptions } from './unique-figure-ccs.js';
 import { isNamedCcAlreadyPlayed } from './named-cc-tracker.js';
 
@@ -559,9 +559,16 @@ export function figureMatchesCcRestriction(game, dcName, displayName, playableBy
   const kw = [...baseKw, ...(extraKeywords || [])].map((k) => String(k).toLowerCase());
   const isMassive = kw.includes('massive');
   const _dcE = getDcEffects() || {};
-  const affiliation = String(
+  // A figure printed "Any" (Mara Jade) takes its LIST's affiliation, so it can
+  // satisfy a faction-restricted card — alexanbv 2026-08-28: "This also applies
+  // to faction restricted cards like HoF PoG Worth every credit etc". Without
+  // this she matched NONE of them, because "any" is not a faction.
+  const _ownAff = String(
     (_dcE[dcName] || _dcE[base] || _dcE[`${base} (Elite)`] || _dcE[`${base} (Regular)`] || {}).affiliation || '',
   ).toLowerCase();
+  const affiliation = (_ownAff && _ownAff !== 'any')
+    ? _ownAff
+    : (opts.listAffiliation || firstSeenArmyAffiliation(getDcList(game, opts.playerNum ?? 1) || [], _dcE) || '');
   const alts = pb.split(/\s+or\s+/i)
     .map((a) => a.trim().replace(/^"|"$/g, '').toLowerCase())
     .map((a) => a.replace(/^any\s+/, '').replace(/\s+figure$/, '').trim());
