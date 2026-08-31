@@ -250,7 +250,7 @@ export function getUniqueCcPlayerOptions(game, playerNum, cardName) {
       // LIST's affiliation, and may only borrow a unique figure's card when that
       // figure's faction symbol matches. A Rebel hero sitting in an Imperial list
       // does not lend her its card.
-      const _flAff = effectiveFigureAffiliation(game, playerNum, dcNameFromFigureKey(fk));
+      const _flAff = effectiveFigureAffiliation(game, playerNum, dcNameFromFigureKey(fk), fk);
       const _cardAff = uniqueCcFigureAffiliation(cardName);
       if (_flAff && _cardAff && _flAff !== _cardAff) continue;
       const flUsed = !!game.roundFigureAbilityUsed?.[`${dcNameFromFigureKey(fk)}_fast_learner`];
@@ -395,13 +395,61 @@ export function fallenMasterWaivesFactionFor(game, playerNum, figureKey) {
  * offered every unique-figure card in the game regardless of faction. Anyone
  * printed "Any" therefore takes the LIST's affiliation.
  */
-export function effectiveFigureAffiliation(game, playerNum, dcName) {
+export function effectiveFigureAffiliation(game, playerNum, dcName, figureKey = null) {
   const eff = getDcEffects() || {};
   const base = String(dcName || '').replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
-  const own = String((eff[dcName] || eff[base] || {}).affiliation || '').toLowerCase();
+  const entry = eff[dcName] || eff[base] || {};
+
+  // COMPANIONS take their HOST's affiliation, whatever their own card says.
+  // alexanbv 2026-08-29: "a companion always have the affiliation of the parent
+  // figure, no matter the affiliation of the card. For example, the child
+  // attached to Onar is a scum". So The Child is Scum on Onar Koma and Rebel on
+  // a Rebel host — the companion's own card never decides.
+  if (entry.companion === true) {
+    const hostName = _companionHostDcName(game, playerNum, dcName, figureKey);
+    if (hostName) {
+      const hostBase = String(hostName).replace(/\s*\((?:Elite|Regular)\)\s*$/i, '').trim();
+      const hostAff = String((eff[hostName] || eff[hostBase] || {}).affiliation || '').toLowerCase();
+      if (hostAff && hostAff !== 'any') return hostAff;
+    }
+  }
+
+  const own = String(entry.affiliation || '').toLowerCase();
   if (own && own !== 'any') return own;
   const list = (playerNum === 1 ? game?.p1DcList : game?.p2DcList) || [];
   return firstSeenArmyAffiliation(list, eff);
+}
+
+/**
+ * The DC name of a companion's host, or null.
+ *
+ * Two routes, because companions arrive two ways: some are registered live in
+ * `companionHostMap` when they enter play, and some are declared statically by
+ * an attachment or host card carrying a `companion: "<name>"` field.
+ */
+function _companionHostDcName(game, playerNum, companionDcName, figureKey) {
+  // 1. Live registration (Spot Weld's JD, Dio, BD-1 …).
+  const reg = figureKey ? game?.companionHostMap?.[figureKey] : null;
+  if (reg?.hostFigureKey) return dcNameFromFigureKey(reg.hostFigureKey);
+
+  // 2. Static declaration: a host DC, or an attachment on one, names it.
+  const eff = getDcEffects() || {};
+  const list = (playerNum === 1 ? game?.p1DcList : game?.p2DcList) || [];
+  const mids = (playerNum === 1 ? game?.p1DcMessageIds : game?.p2DcMessageIds) || [];
+  const ccAtt = (playerNum === 1 ? game?.p1CcAttachments : game?.p2CcAttachments) || {};
+  const dcAtt = (playerNum === 1 ? game?.p1DcAttachments : game?.p2DcAttachments) || {};
+  const want = String(companionDcName || '').toLowerCase();
+  for (let i = 0; i < list.length; i++) {
+    const hostName = typeof list[i] === 'object' ? (list[i].dcName || list[i].displayName) : list[i];
+    if (!hostName) continue;
+    if (String(eff[hostName]?.companion || '').toLowerCase() === want) return hostName;
+    const mid = mids[i];
+    for (const att of [...(ccAtt[mid] || []), ...(dcAtt[mid] || [])]) {
+      const a = eff[att] || eff[`[${att}]`];
+      if (String(a?.companion || '').toLowerCase() === want) return hostName;
+    }
+  }
+  return null;
 }
 
 /** The affiliation of the unique figure a card names, or null. */

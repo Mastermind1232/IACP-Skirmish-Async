@@ -593,8 +593,23 @@ LIST's affiliation. `effectiveFigureAffiliation` applies that to the per-figure
 restriction check, so faction-restricted cards work; `uniqueCcFigureAffiliation`
 reads the card side, so Fast Learner can compare them.
 
-A list with no affiliation at all (Mara alone, everything "Any") correctly offers
-her nothing — there is no faction to inherit.
+A list with no affiliation at all is not a real case — alexanbv 2026-08-29:
+"Mara alone is never a list."
+
+**Companions take their HOST's affiliation**, whatever their own card prints
+(same ruling): "a companion always have the affiliation of the parent figure, no
+matter the affiliation of the card. For example, the child attached to Onar is a
+scum." The Child's card says "Any", so without this it fell through to the LIST's
+affiliation, which is right only by coincidence in a single-faction list.
+`effectiveFigureAffiliation` resolves the host first, via `companionHostMap` for
+live-registered companions and via the `companion:` field on a host card or
+attachment for declared ones.
+
+Testing that needed care: the first version of the guard was **vacuous**, because
+with the rule removed the list fallback returned the same answer. The test now
+puts a Rebel card FIRST in the list while the companion rides a Scum host, so a
+list-based answer and a host-based answer differ. Three cases fail without the
+rule.
 
 Guarded by `tests/domain/oracle/cc-mara-affiliation.test.js`, using real cards on
 both sides of the line. Both halves confirmed non-vacuous.

@@ -23,6 +23,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getCcPlayerOptions, effectiveFigureAffiliation, uniqueCcFigureAffiliation } from '../../../src/game/unique-figure-ccs.js';
+import { firstSeenArmyAffiliation } from '../../../src/game/adaptive-skills-helpers.js';
+import { getDcEffects } from '../../../src/data-loader.js';
 
 const MARA = 'Mara Jade-1-0';
 
@@ -104,5 +106,63 @@ describe('faction-restricted cards follow the same rule', () => {
     assert.equal(maraOffered(solo, 'Heart of Freedom'), false);
     assert.equal(maraOffered(solo, 'Price of Glory'), false);
     assert.equal(maraOffered(solo, 'Worth Every Credit'), false);
+  });
+});
+
+describe('a companion takes its HOST affiliation, not its own card', () => {
+  // alexanbv 2026-08-29: "a companion always have the affiliation of the parent
+  // figure, no matter the affiliation of the card. For example, the child
+  // attached to Onar is a scum."
+  //
+  // The Child's own card prints "Any", and [Clan of Two] is what attaches it.
+  // Onar Koma is Scum, so The Child is Scum while riding him — and Rebel on a
+  // Rebel host. The companion's own card never decides.
+  const CHILD = 'The Child-2-0';
+
+  // The host must differ from what the LIST would resolve to, or the test proves
+  // nothing: with the companion rule removed the code falls through to the list
+  // affiliation, and in a single-faction list that is the same answer by
+  // accident. So the Rebel DC is listed FIRST (making the list read Rebel) while
+  // the companion's host is the Scum one.
+  const hostedBy = (hostDc, decoyFirst) => ({
+    gameId: 'g',
+    p1DcList: [{ dcName: decoyFirst }, { dcName: hostDc }, { dcName: 'The Child' }],
+    p1DcMessageIds: ['m0', 'm1', 'm2'],
+    p1DcAttachments: { m1: ['Clan of Two'] },
+    figurePositions: {
+      1: { [`${decoyFirst}-1-0`]: 'e18', [`${hostDc}-2-0`]: 'e19', [CHILD]: 'e20' },
+    },
+  });
+
+  it("is Scum on Onar Koma even when the list reads Rebel — alexanbv's example", () => {
+    const g = hostedBy('Onar Koma', 'Luke Skywalker');
+    assert.equal(firstSeenArmyAffiliation(g.p1DcList, getDcEffects()), 'rebel',
+      'the list itself reads Rebel, so a list-based answer would be wrong');
+    assert.equal(effectiveFigureAffiliation(g, 1, 'The Child', CHILD), 'scum',
+      'the HOST decides, not the list');
+  });
+
+  it('is Rebel on a Rebel host even when the list reads Scum', () => {
+    const g = hostedBy('Luke Skywalker', 'Onar Koma');
+    assert.equal(firstSeenArmyAffiliation(g.p1DcList, getDcEffects()), 'scum');
+    assert.equal(effectiveFigureAffiliation(g, 1, 'The Child', CHILD), 'rebel');
+  });
+
+  it('follows a live-registered host too, not just an attachment', () => {
+    // Companions arrive two ways: declared by an attachment, or registered in
+    // companionHostMap when they enter play. Both must resolve the host.
+    const g = {
+      gameId: 'g',
+      p1DcList: [{ dcName: 'Luke Skywalker' }, { dcName: 'Onar Koma' }, { dcName: 'The Child' }],
+      p1DcMessageIds: ['m0', 'm1', 'm2'],
+      companionHostMap: { [CHILD]: { hostFigureKey: 'Onar Koma-2-0', playerNum: 1 } },
+      figurePositions: { 1: { 'Luke Skywalker-1-0': 'e18', 'Onar Koma-2-0': 'e19', [CHILD]: 'e20' } },
+    };
+    assert.equal(effectiveFigureAffiliation(g, 1, 'The Child', CHILD), 'scum');
+  });
+
+  it('a non-companion is unaffected', () => {
+    const g = hostedBy('Onar Koma', 'Luke Skywalker');
+    assert.equal(effectiveFigureAffiliation(g, 1, 'Onar Koma', 'Onar Koma-2-0'), 'scum');
   });
 });
