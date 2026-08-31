@@ -33,11 +33,26 @@ import { readFileSync } from 'node:fs';
 
 const read = (rel) => readFileSync(new URL(`../../${rel}`, import.meta.url).pathname, 'utf8');
 
-/** Every place that builds a figure-blocking set for a LOS trace. */
+/** Every SHIPPED place that builds a figure-blocking set for a LOS trace. */
 const LOS_BLOCKING_BUILDERS = [
   'src/game/effective-los.js',
   'src/handlers/dc-play-area.js',
   'src/engine/available-actions.js',
+];
+
+/**
+ * Local-only harnesses that hold a fourth copy of the rule. These are
+ * .gitignored on purpose (see the block in .gitignore), so they exist on a
+ * working copy and NOT in a fresh clone — checked when present, skipped when
+ * not.
+ *
+ * This file used to list measure-los-parity.js alongside the shipped builders,
+ * which made `npm test` pass on a machine that happened to have it and fail with
+ * ENOENT anywhere else. Found 2026-08-31 by running the suite in a clean
+ * worktree; it had been that way since the guard was written on 2026-08-18, and
+ * every "all green" I reported in between was green only on this working copy.
+ */
+const LOCAL_LOS_BUILDERS = [
   'tests/headless/measure-los-parity.js',
 ];
 
@@ -49,9 +64,18 @@ const LOS_BLOCKING_BUILDERS = [
 const BLOCKER_SIDE_SKIP = /keywords[^\n]*===\s*'MASSIVE'\)\)\s*continue;/;
 
 describe('MASSIVE does not exempt the figure in the middle', () => {
-  for (const file of LOS_BLOCKING_BUILDERS) {
-    test(`${file} does not skip MASSIVE blockers`, () => {
-      const src = read(file);
+  for (const file of [...LOS_BLOCKING_BUILDERS, ...LOCAL_LOS_BUILDERS]) {
+    test(`${file} does not skip MASSIVE blockers`, (t) => {
+      let src;
+      try {
+        src = read(file);
+      } catch (err) {
+        if (err.code === 'ENOENT' && LOCAL_LOS_BUILDERS.includes(file)) {
+          t.skip(`${file} is gitignored and absent here — nothing to check`);
+          return;
+        }
+        throw err;
+      }
       const offending = src.split('\n')
         .map((line, i) => [i + 1, line])
         .filter(([, line]) => BLOCKER_SIDE_SKIP.test(line) && !line.trim().startsWith('//'));
