@@ -386,10 +386,15 @@ describe('Section 2: DC Data Validation — all DCs have required fields', () =>
     assert.strictEqual(s.speed, 4);
   });
 
-  it('Ahsoka Tano is Rebel, cost 8, health 12, speed 4', () => {
+  // Cost corrected 8 -> 7 on 2026-08-31 during the Deployment Card sweep. This
+  // assertion mirrored the data rather than the card, so it carried the error
+  // forward. vassal_extracted/images/dc-figures/Ahsoka Tano [IACP].png is the
+  // only art we have for her and its deployment badge reads 7; there is no
+  // superseded FFG image that could have said 8.
+  it('Ahsoka Tano is Rebel, cost 7, health 12, speed 4', () => {
     const s = getDcStats('Ahsoka Tano');
     assert.strictEqual(dcEffects['Ahsoka Tano'].affiliation, 'Rebel');
-    assert.strictEqual(s.cost, 8);
+    assert.strictEqual(s.cost, 7);
     assert.strictEqual(s.health, 12);
     assert.strictEqual(s.speed, 4);
   });
