@@ -1418,7 +1418,6 @@
       "attack": {
         "dice": [
           "red",
-          "red",
           "green"
         ],
         "type": "range"
@@ -1573,6 +1572,7 @@
         "white"
       ],
       "surgeAbilities": [
+        "damage 2",
         "recover 1"
       ],
       "attachment": false,
