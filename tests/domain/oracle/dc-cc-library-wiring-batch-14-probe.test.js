@@ -26,7 +26,12 @@ const BATCH = [
   ['Rank and File',         ['mpBonus', 'trooperMpBonusRound']],
   ['Reactive Loyalties',    ['chooseOne']],
   ['Recovery',              ['recoverDamage']],
-  ['Reduce to Rubble',      ['chooseAdjacentHostileThen', 'placeRubbleOnTargetAndAdjacent']],
+  // chooseAdjacentHostileThen was dead config: the placeRubbleOnTargetAndAdjacent
+  // branch (abilities.js:4625) returns before the chooseAdjacentHostileThen branch
+  // ever runs, and the card damages an AREA (every figure and object within 2 of
+  // the target space), not one chosen adjacent hostile. It survived only as a
+  // headless playability gate that wrongly required an adjacent hostile.
+  ['Reduce to Rubble',      ['placeRubbleOnTargetAndAdjacent']],
   ['Reposition',            ['pushFriendlyWithin3Spaces']],
   ['Rest in Peace',         ['draw', 'restInPeaceEffect']],
   ['Retaliation',           ['chooseOne']],

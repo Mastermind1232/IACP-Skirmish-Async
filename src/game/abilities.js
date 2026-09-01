@@ -9996,7 +9996,7 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: chooseAdjacentHostileThen — choose one adjacent hostile figure, apply damage and/or strain.
   // Supports: damage, strain, scaleStrainToRound, weaken/stun/bleed (conditions on target), selfStrain (cost),
-  //           healSelfIfTrait: {trait, amount} — recover N damage if activating DC has the named trait.
+  //           healSelfIfTrait: {trait, amount} — recover N damage if the CHOSEN TARGET has the named trait.
   // First call: finds adjacent hostiles; if exactly 1, auto-resolves; if 2+, returns requiresChoice so a picker is shown.
   // Second call: context.chosenFigureKey is set (from pendingCcChoice.choiceValues[choiceIndex]); applies directly.
   if (entry.type === 'ccEffect' && entry.chooseAdjacentHostileThen && (entry.chooseAdjacentHostileThen.damage > 0 || entry.chooseAdjacentHostileThen.strain > 0)) {

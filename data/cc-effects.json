@@ -84,14 +84,14 @@
       "cost": 1,
       "playableBy": "BT-1",
       "timing": "duringActivation",
-      "effect": "Use during your activation. Place this card on your Deployment card as an Attachment.\n----------------\nAttachment: Exhaust this card before you declare an attack. Figures do not block line of sight during this attack.",
+      "effect": "Use during your activation. Place this card on your Deployment card.\n\nAttachment: Exhaust this card before you declare an attack. Figures do not block line of sight during this attack.",
       "abilityId": "Ballistics Matrix"
     },
     "Battle Scars": {
       "cost": 0,
       "playableBy": "WOOKIEE",
       "timing": "duringActivation",
-      "effect": "Use during your activation to get 1 Power Token. If you have suffered 3 or more Damage, gain 2 Power Tokens instead.",
+      "effect": "Use during your activation to gain 1 Power Token. If you have suffered 3 or more Damage, gain 2 Power Tokens instead.",
       "abilityId": "Battle Scars"
     },
     "Battlefield Awareness": {
@@ -141,7 +141,7 @@
       "cost": 2,
       "playableBy": "K-2SO",
       "timing": "startOfRound",
-      "effect": "Place this card on your Deployment card at the start of a round. It is now an Attachment.\n\nAttachment: You cannot be the target of an attack. Discard this card at the end of your activation or when you declare an attack.",
+      "effect": "Place this card on your Deployment card at the start of a round.\n\nAttachment: You cannot be the target of an attack. Discard this card at the end of your activation or when you declare an attack.",
       "abilityId": "Blend In"
     },
     "Blitz": {
@@ -184,7 +184,7 @@
       "cost": 1,
       "playableBy": "Jyn Erso",
       "timing": "duringActivation",
-      "effect": "Use during your activation to look at the top 3 cards of your Command deck. Place 1 of them into your hand and the others on the top of bottom of your Command deck in any order.\n\nPassive: When this card is discarded from your Command deck, re-draw it.",
+      "effect": "Use during your activation to look at the top 3 cards of your Command deck. Place 1 of them into your hand and the others on the top or bottom of your Command deck in any order.\n\nPassive: When this card is discarded from your Command deck, re-draw it.",
       "abilityId": "Built on Hope"
     },
     "Burst Fire": {
@@ -287,14 +287,14 @@
       "cost": 1,
       "playableBy": "Biv Bodhrik",
       "timing": "duringActivation",
-      "effect": "Use during your activation to move up to 2 spaces. Then perform a melee attack without using an action using 1 red and 1 yellow die. The attack uses only the following abilities:\n- Pierce 1\n- Surge: +1 Hit\n- Surge: Stun",
+      "effect": "Use during your activation to move up to 2 spaces. Then, perform a Melee attack without using an action using 1 red and 1 yellow die. This attack uses only the following abilities:\n- Pierce 1\n- Surge: +1 Hit\n- Surge: Stun",
       "abilityId": "Close and Personal"
     },
     "Close the Gap": {
       "cost": 3,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. Each friendly BRAWLER may move up to 2 spaces. Then each friendly BRAWLER within 4 spaces of a hostile figure gains 1 Armor Token.",
+      "effect": "Use at the start of a round. Each friendly BRAWLER may move up to 2 spaces. Then each friendly BRAWLER within 4 spaces of a hostile figure gains 1 Block Token.",
       "abilityId": "Close the Gap",
       "noRestrictionBox": true
     },
@@ -317,7 +317,7 @@
       "cost": 1,
       "playableBy": "IMPERIAL",
       "timing": "duringActivation",
-      "effect": "Use during your activation. Distribute Hit tokens equal to the current round number to friendly figures within 3 spaces.",
+      "effect": "Use during your activation. Distribute Hit Tokens equal to the current round number to friendly figures within 3 spaces.",
       "abilityId": "Combat Resupply"
     },
     "Comm Disruption": {
@@ -425,7 +425,7 @@
       "cost": 0,
       "playableBy": "Bib Fortuna",
       "timing": "specialAction",
-      "effect": "Choose 1 Command card in your discard pile and shuffle it into your Command deck.\n\nPassive: Once per round, when this card is discarded from your hand or deck, you may shuffle it into your Command deck.",
+      "effect": "Special Action: Choose 1 Command card in your discard pile and shuffle it into your Command deck.\n\nPassive: Once per round, when this card is discarded from your hand or deck, you may shuffle it into your Command deck.",
       "abilityId": "De Wanna Wanga"
     },
     "Deadeye": {
@@ -470,7 +470,7 @@
       "cost": 1,
       "playableBy": "FORCE USER",
       "timing": "whenAttackDeclaredOnYou",
-      "effect": "Use when a Ranged attack targeting you is declared. Apply -2 Accuracy to the attack results. After the attack is resolved, the attacker suffers 1 Damage.",
+      "effect": "Use when a Ranged attack targeting you is declared. Apply -2 Accuracy to the attack results. After this attack is resolved, the attacker suffers 1 Damage.",
       "abilityId": "Deflection",
       "effectTiming": "afterAttackResolves"
     },
@@ -513,14 +513,14 @@
       "cost": 1,
       "playableBy": "DROID or HUNTER",
       "timing": "duringActivation",
-      "effect": "Use during your activation. Each non-DROID figure suffers 1 Strain. Until the end of the round, non-Droid figures cannot recover Strain.",
+      "effect": "Use during your activation. Each non-DROID figure suffers 1 Strain. Until the end of the round, non-DROID figures cannot recover Strain.",
       "abilityId": "Dioxis Fumes"
     },
     "Disable": {
       "cost": 0,
       "playableBy": "TECHNICIAN or SMUGGLER",
       "timing": "specialAction",
-      "effect": "Technician or Smuggler Action: Choose an adjacent hostile figure. Until the end of that figure's next activation, that figure cannot use action or surge abilities."
+      "effect": "Special Action: Choose an adjacent hostile figure. Until the end of that figure's next activation, that figure cannot use Surge or Special Action abilities."
     },
     "Disarm": {
       "cost": 1,
@@ -639,7 +639,7 @@
       "cost": 2,
       "playableBy": "Hera Syndulla",
       "timing": "specialAction",
-      "effect": "Choose a friendly figure within 2 spaces. That figure is defeated. Your opponent gains only half the VPs they would normally gain (rounded down)."
+      "effect": "Special Action: A friendly figure within 2 spaces is defeated. Your opponent gains only half the VPs they would normally gain (rounded down)."
     },
     "Explosive Weaponry": {
       "cost": 1,
@@ -738,7 +738,7 @@
       "cost": 2,
       "playableBy": "Baze Malbus",
       "timing": "whenFriendlyFigureWithin3SpacesWouldBeDefeated",
-      "effect": "Use when a friendly figure within 3 spaces has suffered damage equal to its Health, before it is defeated. Move up to 2 spaces, gain 1 Power Token, and then perform an attack. Then, that friendly figure is defeated.",
+      "effect": "Use when a friendly figure within 3 spaces has suffered Damage equal to its Health, before it is defeated. Move up to 2 spaces, gain 1 Power Token, and then perform an attack. Then, that friendly figure is defeated.",
       "abilityId": "Final Stand"
     },
     "Findsman Meditation": {
@@ -908,7 +908,7 @@
       "cost": 1,
       "playableBy": "Saw Gerrera",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. Each friendly figure with no other friendly figures within 2 spaces gains 1 Block token and becomes Hidden.",
+      "effect": "Use at the start of a round. Each friendly figure with no other friendly figures within 2 spaces gains 1 Block Token and becomes Hidden.",
       "abilityId": "Guerilla Warfare"
     },
     "Guild Programming": {
@@ -1027,7 +1027,7 @@
       "cost": 0,
       "playableBy": "FORCE USER",
       "timing": "whileDefending",
-      "effect": "(MULTIPLE TIMING WINDOWS)\n\nUse while defending to reroll 1 defense die. \n\nUse while attacking to reroll 1 attack die. \n\nSpecial Action: Gain 1 VP.",
+      "effect": "Use while defending to reroll 1 defense die.\n\nUse while attacking to reroll 1 attack die.\n\nSpecial Action: Gain 1 VP.",
       "abilityId": "I Can Feel It",
       "timings": [
         "whileDefending",
@@ -1082,7 +1082,7 @@
       "cost": 2,
       "playableBy": "FORCE USER",
       "timing": "whileDefending",
-      "effect": "Use while defending to add 1 black die to your defense pool.\n\nPassive: While this card is in your discard pile, FORCE USERS  gain:\n- Surge: Re-draw this card.",
+      "effect": "Use while defending to add 1 black die to your defense pool.\n\nPassive: While this card is in your discard pile, your FORCE USERS gain:\n- Surge: Re-draw this card.",
       "abilityId": "Knowledge and Defense"
     },
     "Learn by Example": {
@@ -1271,7 +1271,7 @@
       "cost": 3,
       "playableBy": "Darth Vader",
       "timing": "whenHostileFigureDefeatedNotYourActivation",
-      "effect": "Use when a hostile figure is defeated to interrupt to move up to 2 spaces. Then, you may use \"Force Choke\" or perform an attack.",
+      "effect": "Use when a hostile figure is defeated. If it is not your activation, you may interrupt to move up to 2 spaces, and either use \"Force Choke\" or perform an attack. When you declare this attack, remove 1 die from your attack pool.",
       "abilityId": "Lord of the Sith"
     },
     "Mandalorian Steel": {
@@ -1305,7 +1305,7 @@
       "cost": 2,
       "playableBy": "MHD-19",
       "timing": "whenFriendlyFigureWithin3SpacesWouldBeDefeated",
-      "effect": "Use when a friendly figure within 3 spaces of you has suffered damage equal to its Health. Instead of being defeated, it recovers 3 damage.",
+      "effect": "Use when a friendly figure within 3 spaces of you has suffered Damage equal to its Health. Instead of being defeated, it recovers 3 Damage.",
       "abilityId": "Miracle Worker"
     },
     "Mitigate": {
@@ -1319,7 +1319,7 @@
       "cost": 2,
       "playableBy": "DROID",
       "timing": "specialAction",
-      "effect": "Special Action: Take 1 Strain. Place this card in your Play Area. (i.e. in your discord Player Area channel)\n----------------\nAttachment: Exhaust this card during a friendly DROID's activation. That figure gains 1 movement point."
+      "effect": "Special Action: Take 1 Strain. Place this card in your play area.\n\nExhaust this card during a friendly DROID's activation. That figure gains 1 movement point."
     },
     "New Orders": {
       "cost": 3,
@@ -1421,14 +1421,14 @@
       "cost": 0,
       "playableBy": "HUNTER",
       "timing": "whenHostileFigureWithin3SpacesDefeated",
-      "effect": "Use when a hostile figure within 3 spaces is defeated to gain 2 Block tokens.",
+      "effect": "Use when a hostile figure within 3 spaces is defeated to gain 2 Block Tokens.",
       "abilityId": "Paid in Beskar"
     },
     "Parry": {
       "cost": 0,
       "playableBy": "BRAWLER or GUARDIAN",
       "timing": "whileDefending",
-      "effect": "Use while defending to apply +1 Block or +1 Evade to the defense results.",
+      "effect": "Use while defending to apply +1 Block or +1 Evade to your defense results.",
       "abilityId": "Parry"
     },
     "Parting Blow": {
@@ -1560,7 +1560,7 @@
       "cost": 1,
       "playableBy": "Mara Jade",
       "timing": "afterAttackTargetingYouResolved",
-      "effect": "Use after an attack targeting you resolves. Perform 1 of the following based on your affiliation: \n\n- IMPERIAL: The attacker suffers 3 Damage\n- SCUM: You gain 3 VPs\n- REBEL:  You recover 3 Damage",
+      "effect": "Use after an attack targeting you resolves. Perform 1 of the following based on your affiliation: \n\n- IMPERIAL: The attacker suffers 3 Damage\n- SCUM: You gain 3 VPs\n- REBEL: You recover 3 Damage",
       "abilityId": "Reactive Loyalties"
     },
     "Rebel Graffiti": {
@@ -1602,7 +1602,7 @@
       "cost": 2,
       "playableBy": "Any Figure",
       "timing": "duringActivation",
-      "effect": "If you a are TECHNICIAN, you may use this card during your activation without spending an action.\n\nSpecial Action: Choose an adjacent friendly DROID or VEHICLE. That figure recovers 3 damage.\nFree Action (TECHNICIAN): Choose an adjacent friendly DROID or VEHICLE. That figure recovers 3 damage.",
+      "effect": "If you are a TECHNICIAN, you may use this card during your activation without spending an action.\n\nSpecial Action: Choose an adjacent friendly DROID or VEHICLE. That figure recovers 3 Damage.",
       "abilityId": "Repair"
     },
     "Reposition": {
@@ -1644,7 +1644,7 @@
       "cost": 1,
       "playableBy": "WOOKIEE or CREATURE",
       "timing": "specialAction",
-      "effect": "Special Action: If you have suffered 3 or more damage, choose up to 3 adjacent hostile figures. Those figures become Stunned.",
+      "effect": "Special Action: If you have suffered 3 or more Damage, choose up to 3 adjacent hostile figures. Those figures become Stunned.",
       "abilityId": "Roar"
     },
     "Run for Cover": {
@@ -1671,14 +1671,14 @@
       "cost": 2,
       "playableBy": "Unique",
       "timing": "startOfRound",
-      "effect": "Place this card on your Deployment card at the start of a round as an Attachment.\n\nAttachment: Before you would be defeated, or at the end of this round, recover 2 Damage and discard this card.",
+      "effect": "Place this card on your Deployment card at the start of a round.\n\nAttachment: Before you would be defeated, or at the end of this round, recover 2 Damage and discard this card.",
       "abilityId": "Second Chance"
     },
     "Self-Augmentation": {
       "cost": 0,
       "playableBy": "TECHNICIAN",
       "timing": "duringActivation",
-      "effect": "Use during your activation to place this card on your Deployment card as an Attachment.\n\nAttachment: You gain the DROID trait. While attacking, you may reroll one attack die."
+      "effect": "Use during your activation to place this card on your Deployment card.\n\nAttachment: You gain the DROID trait. While attacking, you may reroll one attack die."
     },
     "Self-Defense": {
       "cost": 0,
@@ -1717,14 +1717,14 @@
       "cost": 1,
       "playableBy": "DROID or VEHICLE",
       "timing": "duringActivation",
-      "effect": "Use during your activation. Spend 3 movement points to become Focused. \n\nPassive (Discard): When a friendly DROID or VEHICLE is defeated, you may re-draw this card.",
+      "effect": "Use during your activation. Spend 3 movement points to become Focused. \n\nPassive (Discard Pile): When a friendly DROID or VEHICLE is defeated, you may re-draw this card.",
       "abilityId": "Shared Experience"
     },
     "Signal Jammer": {
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Put this card into play at the start of a round. (Play area in your discord channel)\n\n------\n\nWhen any player plays a Command card, discard that card and cancel its effects. Then, discard this card.",
+      "effect": "Put this card into play at the start of a round.\n\nWhen any player plays a Command card, discard that card and cancel its effects. Then, discard this card.",
       "noRestrictionBox": true
     },
     "Single Purpose": {
@@ -1889,7 +1889,7 @@
       "cost": 0,
       "playableBy": "DROID or HEAVY WEAPON",
       "timing": "duringAttack",
-      "effect": "Use while attacking to reroll 1 attack die. \n\nPassive (Discard pile): While this card is in your discard pile, your DROIDS gain: \n- Surge: Re-draw this card.",
+      "effect": "Use while attacking to reroll 1 attack die. \n\nPassive: While this card is in your discard pile, your DROIDS gain: \n- Surge: Re-draw this card.",
       "abilityId": "Targeting Network"
     },
     "Telekinetic Throw": {
@@ -1909,7 +1909,7 @@
       "cost": 1,
       "playableBy": "DROID",
       "timing": "duringActivation",
-      "effect": "Roll 1 green die. Each other figure and object in or adjacent to your space suffers Damage equal to the Damage results. Then, you are defeated."
+      "effect": "Use during your activation. Roll 1 green die. Each other figure and object in or adjacent to your space suffers Damage equal to the Damage results. Then, you are defeated."
     },
     "There is Another": {
       "cost": 0,
@@ -1968,7 +1968,7 @@
       "cost": 1,
       "playableBy": "DROID",
       "timing": "specialAction",
-      "effect": "Special Action: Up to 3 friendly DROIDS each move up to 1 space. Then choose a hostile figure within 5 spaces and line of sight. It suffers Damage equal to the number of those friendly DROIDS who have line of sight to it."
+      "effect": "Special Action: Up to 3 friendly DROIDS each move up to 1 space. Then choose a hostile figure within 5 spaces and line of sight. It suffers Damage equal to the number of those friendly DROIDS that have line of sight to it."
     },
     "Unlimited Power": {
       "cost": 2,
@@ -2016,7 +2016,7 @@
       "cost": 1,
       "playableBy": "CT-1701",
       "timing": "whenYouDeclareAttack",
-      "effect": "Use when you declare an attack. remove up to 2 dice of your choice from the defense pool.",
+      "effect": "Use when you declare an attack. Remove up to 2 dice of your choice from the defense pool.",
       "abilityId": "Wild Fire"
     },
     "Wild Fury": {
@@ -2030,7 +2030,7 @@
       "cost": 0,
       "playableBy": "Doctor Aphra",
       "timing": "whenCommandCardDiscardedFromHandOrDeck",
-      "effect": "Use when a Command card is discarded from your hand or deck. You gain VPs equal to that card's cost. When this card is discarded from your hand or deck, gain 1 VP."
+      "effect": "Use when a Command card is discarded from your hand or deck. You gain VPs equal to that card's cost.\n\nPassive: When this card is discarded from your hand or deck, gain 1 VP."
     },
     "Worth Every Credit": {
       "cost": 2,

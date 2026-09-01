@@ -540,7 +540,7 @@
     },
     "Built on Hope": {
       "type": "ccEffect",
-      "label": "Look at top 3 of your deck; choose 1 to add to hand (others returned to top)",
+      "label": "Look at top 3 of your deck; choose 1 to add to hand (others to top or bottom in any order)",
       "builtOnHopeEffect": true,
       "wiredStatus": "wired"
     },
@@ -678,7 +678,7 @@
     },
     "Gauntlet Blade": {
       "type": "ccEffect",
-      "label": "Roll 1 green die vs adjacent hostile: Dmg = Damage; if Surge, gain Power Token",
+      "label": "Roll 1 green die vs adjacent hostile: Damage = the Damage results; if Surge, gain a Block Token",
       "rollOneDie": "green",
       "rollOneDieTarget": "adjacentHostile",
       "rollOneDieSurgeSelfPowerToken": true,
@@ -771,7 +771,7 @@
     },
     "Cloned Reinforcements": {
       "type": "ccEffect",
-      "label": "Special: place defeated friendly non-DROID non-unique TROOPER cost Ã¢â€°Â¤4 in empty adjacent space",
+      "label": "Special: place defeated friendly non-DROID non-unique TROOPER cost ≤4 in empty adjacent space",
       "placeDefeatedFigure": {
         "traitFilter": [
           "TROOPER"
@@ -810,7 +810,7 @@
     },
     "Close the Gap": {
       "type": "ccEffect",
-      "label": "Each friendly BRAWLER may move 2 spaces; then gains an Armor Token",
+      "label": "Each friendly BRAWLER may move 2 spaces; then gains a Block Token",
       "grantMpToFriendliesByKeyword": {
         "keyword": "BRAWLER",
         "mp": 2,
@@ -1271,7 +1271,7 @@
     "Demoralizing Monologue": {
       "type": "ccEffect",
       "demoralizingMonologueEffect": true,
-      "label": "Force defender to reroll 1 die during this attack (auto-prompted during combat)",
+      "label": "Force defender to reroll 1 die; then you may reveal your hand to remove that die's results (needs 2+ cards)",
       "wiredStatus": "wired",
       "forceDefenderRerollOne": true,
       "logMessage": "**Demoralizing Monologue** — During this attack, the defender must reroll 1 die of your choice. Flag set — enforced automatically during this attack."
@@ -1334,8 +1334,8 @@
     },
     "Disable": {
       "type": "ccEffect",
-      "label": "Adjacent hostile cannot use Surge abilities or Special actions this round",
-      "logMessage": "**Disable** — Choose an adjacent hostile figure. Until end of round, that figure cannot use Surge abilities or Special actions. Enforced automatically.",
+      "label": "Adjacent hostile cannot use Surge abilities or Special actions until the end of its next activation",
+      "logMessage": "**Disable** — Choose an adjacent hostile figure. Until the end of that figure's next activation, it cannot use Surge abilities or Special actions. Enforced automatically.",
       "wiredStatus": "wired",
       "disablesFigure": true
     },
@@ -1433,10 +1433,10 @@
     "Double or Nothing": {
       "type": "ccEffect",
       "doubleOrNothingEffect": true,
-      "label": "Choose a die to reroll; if same icon type, those icons are doubled automatically",
+      "label": "Choose a die to reroll; if it shows the same number of symbols, you may double or cancel its results",
       "wiredStatus": "wired",
       "doubleMatchingIconsOnReroll": true,
-      "logMessage": "**Double or Nothing** — Choose a die in this attack and reroll it; if the new result shows the same icon type as before, double those matching icons."
+      "logMessage": "**Double or Nothing** — Choose a die in this attack and reroll it; if the new result shows the same number of symbols as before, you may double or cancel that die's results."
     },
     "Draw!": {
       "type": "ccEffect",
@@ -1728,7 +1728,7 @@
     "Face Me!": {
       "type": "ccEffect",
       "faceMeEffect": true,
-      "label": "Push a unique hostile figure to adjacent space; then perform a Melee attack",
+      "label": "Push a unique hostile figure to adjacent space; then perform an attack",
       "wiredStatus": "wired"
     },
     "Face to Face": {
@@ -1885,7 +1885,7 @@
     "Findsman Meditation": {
       "type": "ccEffect",
       "findsmanMeditationEffect": true,
-      "label": "Choose an opponent group; Zuckuss may interrupt before their first action to move 2 or attack",
+      "label": "Choose an opponent group; Zuckuss may interrupt before their first action to move (up to his speed) or attack",
       "wiredStatus": "wired"
     },
     "firing_squad": {
@@ -1972,7 +1972,7 @@
     },
     "Force Drain": {
       "type": "ccEffect",
-      "label": "Choose hostile within 2: deal 3 Damage + Stun + Weaken; if you are a FORCE USER recover 3 Damage",
+      "label": "Choose hostile within 2: deal 3 Damage + Stun + Weaken; if that figure is a FORCE USER you recover 3 Damage",
       "chooseAdjacentHostileThen": {
         "damage": 3,
         "stun": true,
@@ -2352,7 +2352,7 @@
     },
     "Guerilla Warfare": {
       "type": "ccEffect",
-      "label": "Each friendly with no adjacent friendly gains a Block Token and Hidden",
+      "label": "Each friendly with no other friendly within 2 spaces gains a Block Token and Hidden",
       "applyBlockAndHideToIsolatedFriendlies": true,
       "wiredStatus": "wired"
     },
@@ -3018,16 +3018,16 @@
     },
     "Looking for a Fight": {
       "type": "ccEffect",
-      "label": "Gain 1 Power Token; then move 1 space or push an adjacent SMALL figure 1 space",
+      "label": "Gain 1 Hit Token; then move 1 space or push an adjacent SMALL figure 1 space",
       "powerTokenGain": 1,
       "lookingForAFightChoice": true,
-      "logMessage": "Gained **1 Power Token**. Choose: Move 1 space OR push an adjacent SMALL figure 1 space.",
+      "logMessage": "Gained **1 Hit Token**. Choose: Move 1 space OR push an adjacent SMALL figure 1 space.",
       "wiredStatus": "wired"
     },
     "Lord of the Sith": {
       "type": "ccEffect",
       "lordOfTheSithEffect": true,
-      "label": "When hostile defeated (not your activation): interrupt to move 2, then Force Choke or free Melee attack",
+      "label": "When hostile defeated (not your activation): interrupt to move 2, then Force Choke or a free attack (\u22121 attack die)",
       "wiredStatus": "wired"
     },
     "lucky_r2d2": {
@@ -3898,10 +3898,7 @@
     },
     "Reduce to Rubble": {
       "type": "ccEffect",
-      "label": "After attack that did not miss (accuracy): each within 2 of target 1 Damage; place Rubble on target + adjacent",
-      "chooseAdjacentHostileThen": {
-        "damage": 1
-      },
+      "label": "After attack that did not miss (accuracy): each figure and object within 2 spaces of the target space suffers 1 Damage; place Rubble on the target space and each adjacent space",
       "placeRubbleOnTargetAndAdjacent": true,
       "wiredStatus": "wired"
     },
@@ -3921,7 +3918,7 @@
     },
     "Reinforcements": {
       "type": "ccEffect",
-      "label": "Return a defeated TROOPER (reinforcement cost Ã¢â€°Â¤3) adjacent to its group",
+      "label": "Return a defeated TROOPER (reinforcement cost ≤3) adjacent to its group",
       "placeDefeatedFigure": {
         "traitFilter": [
           "TROOPER"
@@ -3999,7 +3996,7 @@
     },
     "Retaliation": {
       "type": "ccEffect",
-      "label": "Choose one: Become Focused; Gain 2 Power Tokens; or Move up to 2 spaces",
+      "label": "Choose one: Become Focused; Gain 2 Hit Tokens; or Move up to 2 spaces",
       "chooseOne": [
         {
           "label": "Become Focused",
@@ -4677,7 +4674,7 @@
     },
     "Squad Swarm": {
       "type": "ccEffect",
-      "label": "After activating a group: activate another same-name group (combined cost Ã¢â€°Â¤15)",
+      "label": "After activating a group: activate another same-name group (combined cost ≤15)",
       "squadSwarmPlayerNum": true,
       "wiredStatus": "wired"
     },
@@ -4840,7 +4837,7 @@
     },
     "Strength in Numbers": {
       "type": "ccEffect",
-      "label": "After you resolve a group's activation: activate another group (combined cost Ã¢â€°Â¤12)",
+      "label": "After you resolve a group's activation: activate another group (combined cost ≤12)",
       "strengthInNumbersPlayerNum": true,
       "wiredStatus": "wired"
     },
@@ -4889,7 +4886,7 @@
     "Support Specialist": {
       "type": "ccEffect",
       "supportSpecialistEffect": true,
-      "label": "Choose DROID/TECHNICIAN/TROOPER within 3 — grant free interrupt move",
+      "label": "Choose a friendly DROID/TECHNICIAN/TROOPER within 3 spaces; that figure interrupts to perform an action",
       "wiredStatus": "wired"
     },
     "suppression": {
@@ -5214,7 +5211,7 @@
     },
     "Transmit the Plans": {
       "type": "ccEffect",
-      "label": "Grant 2 Damage Tokens to activating figure; if adjacent terminal, gain 2 VP (use /editvp +2)",
+      "label": "Distribute 2 Hit Tokens among friendly figures; if adjacent to a terminal, gain 2 VP (use /editvp +2)",
       "grantHitTokensToActivating": 2,
       "vpNoteIfAdjacentTerminal": 2,
       "wiredStatus": "wired"
@@ -5222,10 +5219,10 @@
     "Triangulate": {
       "type": "ccEffect",
       "triangulateEffect": true,
-      "label": "Move friendly DROIDs, then pick hostile in LOS — damage = # DROIDs in play",
+      "label": "Move up to 3 friendly DROIDs, then pick a hostile within 5 and in LOS — damage = # of those DROIDs with LOS to it",
       "wiredStatus": "wired",
       "triangulateCountFriendlyDroids": true,
-      "logMessage": "**Triangulate** — Move your DROID figures first, then pick a hostile in LOS. It suffers Damage equal to the number of DROID figures in your squad in play."
+      "logMessage": "**Triangulate** — Move your DROID figures first, then pick a hostile within 5 spaces and in line of sight. It suffers Damage equal to the number of those DROIDs that have line of sight to it."
     },
     "tripod_eweb": {
       "type": "dcSpecial",

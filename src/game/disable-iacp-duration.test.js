@@ -9,7 +9,12 @@
  *   FFG   cost 2, "Until the end of the ROUND, that figure cannot use Surge
  *         abilities or Special actions."
  *   IACP  cost 0, "Until the end of that figure's NEXT ACTIVATION, that figure
- *         cannot use action or surge abilities."
+ *         cannot use Surge or Special Action abilities."
+ *
+ * The two differ in duration AND in the order of the two ability glyphs, so
+ * both are asserted below. 2026-08-31: the stored text had the glyph order
+ * reversed ("action or surge"); re-read from the card image, the printed
+ * order is Surge glyph then Special Action glyph.
  *
  * The IACP card image is in the repo as
  * vassal_extracted/images/cc/Disable (IACP).png and is the ground truth used
@@ -49,7 +54,8 @@ describe('Disable is the IACP card', () => {
     assert.strictEqual(e.cost, 0, 'IACP Disable costs 0; FFG costs 2');
     assert.match(e.effect, /next activation/i, 'IACP duration, not "end of the round"');
     assert.doesNotMatch(e.effect, /end of the round/i, 'the FFG duration must not come back');
-    assert.match(e.effect, /action or surge abilities/i);
+    assert.match(e.effect, /surge or special action abilities/i, 'IACP glyph order: Surge then Special Action');
+    assert.doesNotMatch(e.effect, /Surge abilities or Special actions/i, 'the FFG phrasing must not come back');
   });
 
   test('an activation already underway does NOT consume the Disable', () => {
