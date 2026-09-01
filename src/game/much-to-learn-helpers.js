@@ -50,3 +50,42 @@ export function applyMuchToLearnReroll({ rerollOneAttackDie = 0 } = {}) {
     rerollOneAttackDie: (rerollOneAttackDie || 0) + MUCH_TO_LEARN_REROLL_DELTA,
   };
 }
+
+/**
+ * Which Much to Learn option is legal, given the friendly figures around Ezra.
+ *
+ * The card gives two mutually-exclusive outcomes and the difference matters: a
+ * reroll is random, turning a die to any side is chosen. alexanbv 2026-08-31:
+ * "For Ezra make sure there is a logic path to detect which option is legal."
+ *
+ * Rules, in order:
+ *   - the source must be ANOTHER figure (Ezra cannot trigger off himself),
+ *   - it must be a friendly UNIQUE,
+ *   - it must be within 3 spaces,
+ *   - if any qualifying source is a FORCE USER the mode is 'turn', otherwise
+ *     'reroll'. 'turn' is strictly better, so a FORCE USER always wins even if a
+ *     non-Force-User unique was found first.
+ *
+ * Distance counting is injected because it needs the map and closed-door edges,
+ * which belong to the handler.
+ *
+ * @param {object[]} candidates {figureKey, dcName, effect, distance}
+ * @param {string} selfFigureKey Ezra's own figure key, excluded
+ * @returns {{mode: 'turn'|'reroll', sourceFigureKey: string, sourceName: string}|null}
+ */
+export function resolveMuchToLearnMode(candidates, selfFigureKey) {
+  if (!Array.isArray(candidates)) return null;
+  let fallback = null;
+  for (const c of candidates) {
+    if (!c || c.figureKey === selfFigureKey) continue;
+    if (!isUniqueFriendly(c.effect)) continue;
+    if (!muchToLearnInRange(c.distance)) continue;
+    if (isForceUserFriendly(c.effect)) {
+      return { mode: 'turn', sourceFigureKey: c.figureKey, sourceName: c.dcName };
+    }
+    if (!fallback) {
+      fallback = { mode: 'reroll', sourceFigureKey: c.figureKey, sourceName: c.dcName };
+    }
+  }
+  return fallback;
+}

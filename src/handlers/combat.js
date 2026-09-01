@@ -155,12 +155,15 @@ import {
 import {
   tripodBlocksAttack,
 } from '../game/tripod-eweb-helpers.js';
+import { resolveThereIsNoTrySourceFigure, thereIsNoTryInRange, thereIsNoTryRollerEligible } from '../game/there-is-no-try-helpers.js';
+import { faceOptionsFor, formatFaceLabel, applyFaceToDie, totalsFor } from '../game/die-face-picker.js';
 import {
   hasMuchToLearnAbility,
   muchToLearnInRange,
   isUniqueFriendly,
   isForceUserFriendly,
   applyMuchToLearnReroll,
+  resolveMuchToLearnMode,
 } from '../game/much-to-learn-helpers.js';
 import {
   hasAdvTargetingComputerAbility,
@@ -1166,21 +1169,25 @@ function _makeDieTurnResolver({ name, eligible, phaseFlag, stageKey }) {
       if (combat[`${sk}Stage`] !== 'face') {
         combat[`${sk}Die`] = parseInt(choice, 10); combat[`${sk}Stage`] = 'face';
         const die = combat.attackDiceResults?.[combat[`${sk}Die`]];
-        const faces = ctx?.getDiceData?.().attack?.[die?.color] || [];
-        const btns = faces.map((f, fi) => new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${fi}_${id}`).setLabel(`${f.acc || 0}a/${f.dmg || 0}d/${f.surge || 0}s`.slice(0, 80)).setStyle(ButtonStyle.Primary));
+        // Shared picker (alexanbv 2026-08-31: "all these die turn abilities
+        // should use similar functions"). faceOptionsFor deduplicates, so a die
+        // whose sheet repeats a face no longer offers the same button twice.
+        const faces = faceOptionsFor('attack', die?.color);
+        const btns = faces.map((f, fi) => new ButtonBuilder().setCustomId(`combat_modsub_${gameId}_${fi}_${id}`).setLabel(formatFaceLabel('attack', f).slice(0, 80)).setStyle(ButtonStyle.Primary));
         await thread?.send({ content: `**${name}** — choose the new face for die #${combat[`${sk}Die`] + 1}:`, components: chunkButtonsToRows(btns) }).catch(discordCatch);
         return { followUp: true };
       }
       const dieIdx = combat[`${sk}Die`]; const faceIdx = parseInt(choice, 10);
       const die = combat.attackDiceResults?.[dieIdx];
-      const newFace = (ctx?.getDiceData?.().attack?.[die?.color] || [])[faceIdx];
+      const newFace = faceOptionsFor('attack', die?.color)[faceIdx];
       if (die && newFace) {
-        combat.attackRoll = combat.attackRoll || { acc: 0, dmg: 0, surge: 0 };
-        combat.attackRoll.acc = Math.max(0, (combat.attackRoll.acc || 0) - (die.acc || 0)) + (newFace.acc || 0);
-        combat.attackRoll.dmg = Math.max(0, (combat.attackRoll.dmg || 0) - (die.dmg || 0)) + (newFace.dmg || 0);
-        combat.attackRoll.surge = Math.max(0, (combat.attackRoll.surge || 0) - (die.surge || 0)) + (newFace.surge || 0);
-        combat.attackDiceResults[dieIdx] = { ...die, acc: newFace.acc || 0, dmg: newFace.dmg || 0, surge: newFace.surge || 0 };
-        thread?.send(`**${name}** — die #${dieIdx + 1} → ${newFace.acc || 0}a/${newFace.dmg || 0}d/${newFace.surge || 0}s.`).catch(discordCatch);
+        // Re-total from the whole pool rather than adding and subtracting one
+        // die: the old arithmetic clamped each term at 0 independently, so a
+        // turn could quietly lose damage when another effect had already
+        // reduced the running total.
+        combat.attackDiceResults[dieIdx] = applyFaceToDie('attack', die, newFace);
+        combat.attackRoll = { ...(combat.attackRoll || {}), ...totalsFor('attack', combat.attackDiceResults) };
+        thread?.send(`**${name}** — die #${dieIdx + 1} turned to ${formatFaceLabel('attack', newFace)}.`).catch(discordCatch);
       }
       if (phaseFlag) combat[phaseFlag] = false; delete combat[`${sk}Stage`]; delete combat[`${sk}Die`];
       return undefined;
@@ -4584,25 +4591,23 @@ export async function handleAttackTarget(interaction, ctx) {
     const atkPos = game.figurePositions?.[attackerPlayerNum]?.[attackerFigureKey];
     if (atkPos) {
       const friendlyPos = game.figurePositions?.[attackerPlayerNum] || {};
-      let _mtlMode = null;
-      let _mtlSourceName = null;
-      // Prefer FORCE USER (turn mode is strictly better); fall back to non-FU unique.
-      for (const [fk, pos] of Object.entries(friendlyPos)) {
-        if (fk === attackerFigureKey) continue;
+      // Which of the two outcomes is legal is decided by resolveMuchToLearnMode:
+      // another friendly UNIQUE within 3 gives a reroll, and a FORCE USER among
+      // them upgrades that to a die turn. Kept in the helper so the rule is
+      // testable on its own (alexanbv 2026-08-31: "for Ezra make sure there is a
+      // logic path to detect which option is legal").
+      const _mtlCandidates = Object.entries(friendlyPos).map(([fk, pos]) => {
         const fkDcName = dcNameFromFigureKey(fk);
-        const fkEff = getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')];
-        if (!isUniqueFriendly(fkEff)) continue;
-        if (!muchToLearnInRange(countSpaces(_csRawMs, atkPos, pos, _csClosedDoorEdges, 50, game))) continue;
-        if (isForceUserFriendly(fkEff)) {
-          _mtlMode = 'turn';
-          _mtlSourceName = fkDcName;
-          break;
-        }
-        if (!_mtlMode) {
-          _mtlMode = 'reroll';
-          _mtlSourceName = fkDcName;
-        }
-      }
+        return {
+          figureKey: fk,
+          dcName: fkDcName,
+          effect: getDcEffectsGlobal()[fkDcName] || getDcEffectsGlobal()[fkDcName?.replace(/\s*\[.*\]\s*$/, '')],
+          distance: countSpaces(_csRawMs, atkPos, pos, _csClosedDoorEdges, 50, game),
+        };
+      });
+      const _mtlPick = resolveMuchToLearnMode(_mtlCandidates, attackerFigureKey);
+      const _mtlMode = _mtlPick?.mode || null;
+      const _mtlSourceName = _mtlPick?.sourceName || null;
       if (_mtlMode) {
         game.pendingCombat.forcedRerollQueue = game.pendingCombat.forcedRerollQueue || [];
         game.pendingCombat.forcedRerollQueue.push({
@@ -5465,13 +5470,30 @@ export async function handleCombatRoll(interaction, ctx) {
     // before — pre-existing, called out rather than silently carried.
     if (game.thereIsNoTryPlayerNum && !combat.tintResolved) {
       const _tintPn = game.thereIsNoTryPlayerNum;
-      const _tintIsRebelForceUser = (figureKey) => {
+      // "within 4 spaces" is measured from the Yoda that played the card. This
+      // was not enforced at all before 2026-08-31, so any friendly REBEL FORCE
+      // USER qualified from anywhere on the board.
+      // NOTE: _csRawMs / _csClosedDoorEdges belong to handleAttackTarget, NOT to
+      // this function — reaching for them here would be a ReferenceError at
+      // runtime that no import smoke test would catch. Read the map locally.
+      const _tintMapId = game.selectedMap?.id;
+      const _tintMapSpaces = _tintMapId ? getMapData(_tintMapId) : null;
+      const _tintYodaFk = resolveThereIsNoTrySourceFigure(game, _tintPn, dcNameFromFigureKey);
+      const _tintYodaPos = _tintYodaFk ? game.figurePositions?.[_tintPn]?.[_tintYodaFk] : null;
+      const _tintEligible = (figureKey) => {
         const _n = dcNameFromFigureKey(figureKey || '');
         if (!_n) return false;
         const _st = ctx.getDcStats?.(_n) || {};
-        const _kws = [...(_st.keywords || []), ...(_st.traits || [])].map((k) => String(k).toUpperCase());
-        return _kws.includes('REBEL') && _kws.includes('FORCE USER');
+        const _kws = [...(_st.keywords || []), ...(_st.traits || [])];
+        if (!thereIsNoTryRollerEligible(_kws)) return false;
+        // No Yoda on the board (defeated, or a pre-existing save with no
+        // recorded source) means no anchor to measure from, so no ability.
+        if (!_tintYodaPos || !_tintMapSpaces) return false;
+        const _rollerPos = game.figurePositions?.[_tintPn]?.[figureKey];
+        if (!_rollerPos) return false;
+        return thereIsNoTryInRange(countSpaces(_tintMapSpaces, _tintYodaPos, _rollerPos, getClosedDoorEdges(game), 50, game));
       };
+      const _tintIsRebelForceUser = _tintEligible;
       const _tintBtns = [];
       // Defense dice — offered when the DEFENDER is the TINT player's REBEL FORCE USER.
       if (defenderPlayerNum === _tintPn && _tintIsRebelForceUser(combat.target?.figureKey)) {

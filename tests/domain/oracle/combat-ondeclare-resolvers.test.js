@@ -94,13 +94,20 @@ describe('zillo-step resolver: Zillo Technique (pierce cancel)', () => {
 
 describe('special-step resolvers: Zeb + Rapid Recalibration (2-stage die turn)', () => {
   const t = { send: async () => ({}) };
+  // These resolvers now take their faces from the SINGLE canonical source
+  // (data/dice.json, via faceOptionsFor) rather than an injected getDiceData,
+  // which is the point of the consolidation — alexanbv 2026-06-21 for There Is
+  // No Try, extended to the whole die-turn family 2026-08-31. So the fixture
+  // uses the blue die's REAL distinct faces; index 4 is "2 Damage / 3 Acc".
   const getDiceData = () => ({ attack: { blue: [{ acc: 1, dmg: 0, surge: 0 }, { acc: 0, dmg: 2, surge: 0 }] } });
+  const BLUE_2DMG_IDX = '4';
   it('Zeb: pick die (stage 1, followUp) → pick face (stage 2) turns the die', async () => {
     const c = { attackDiceResults: [{ color: 'blue', dmg: 1, surge: 0, acc: 0 }], attackRoll: { acc: 0, dmg: 1, surge: 0 }, lasatHonorGuardPhase: true };
     const r1 = await COMBAT_RESOLVERS.lasat_honor_guard.apply('0', { game: {}, combat: c, thread: t, ctx: { getDiceData }, gameId: '42', id: 'lasat_honor_guard' });
     assert.equal(r1.followUp, true); assert.equal(c._lasatStage, 'face'); assert.equal(c._lasatDie, 0);
-    await COMBAT_RESOLVERS.lasat_honor_guard.apply('1', { game: {}, combat: c, thread: t, ctx: { getDiceData }, gameId: '42', id: 'lasat_honor_guard' });
+    await COMBAT_RESOLVERS.lasat_honor_guard.apply(BLUE_2DMG_IDX, { game: {}, combat: c, thread: t, ctx: { getDiceData }, gameId: '42', id: 'lasat_honor_guard' });
     assert.equal(c.attackDiceResults[0].dmg, 2); // turned to the 2-damage face
+    assert.equal(c.attackDiceResults[0].acc, 3); // ...which carries 3 accuracy
     assert.equal(c.attackRoll.dmg, 2);
     assert.equal(c._lasatStage, undefined); assert.equal(c.lasatHonorGuardPhase, false);
   });
@@ -108,7 +115,11 @@ describe('special-step resolvers: Zeb + Rapid Recalibration (2-stage die turn)',
     const c = { attackDiceResults: [{ color: 'blue', dmg: 0, surge: 0, acc: 1 }], attackRoll: { acc: 1, dmg: 0, surge: 0 } };
     const r1 = await COMBAT_RESOLVERS.rapid_recalibration.apply('0', { game: {}, combat: c, thread: t, ctx: { getDiceData }, gameId: '42', id: 'rapid_recalibration' });
     assert.equal(r1.followUp, true);
-    await COMBAT_RESOLVERS.rapid_recalibration.apply('1', { game: {}, combat: c, thread: t, ctx: { getDiceData }, gameId: '42', id: 'rapid_recalibration' });
-    assert.equal(c.attackDiceResults[0].dmg, 2); assert.equal(c.attackRoll.dmg, 2); assert.equal(c.attackRoll.acc, 0);
+    await COMBAT_RESOLVERS.rapid_recalibration.apply(BLUE_2DMG_IDX, { game: {}, combat: c, thread: t, ctx: { getDiceData }, gameId: '42', id: 'rapid_recalibration' });
+    assert.equal(c.attackDiceResults[0].dmg, 2);
+    assert.equal(c.attackRoll.dmg, 2);
+    // Totals are re-summed from the pool, so the turned die's accuracy replaces
+    // the old one rather than both being clamped independently.
+    assert.equal(c.attackRoll.acc, 3);
   });
 });

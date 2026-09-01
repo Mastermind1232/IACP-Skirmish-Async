@@ -163,7 +163,10 @@ describe('GATE-BATTERY: There Is No Try resumes the gate after the roll pause', 
     const built = createTestGame()
       .withMap('mos-eisley-outskirts')
       .withPlayer1Army([{ dcName: 'Stormtrooper' }])
-      .withPlayer2Army([{ dcName: 'Luke Skywalker' }])
+      // Yoda must be on the board: the card is played BY him and its "within 4
+      // spaces" clause is measured FROM him, so with no Yoda there is nothing to
+      // measure and the ability correctly does not fire (2026-08-31).
+      .withPlayer2Army([{ dcName: 'Luke Skywalker' }, { dcName: 'Yoda' }])
       .inRound(1)
       .build();
     const { game, dcMessageMeta } = built;
@@ -181,8 +184,16 @@ describe('GATE-BATTERY: There Is No Try resumes the gate after the roll pause', 
 
     const a = firstFigKey(game, 1);
     const d = firstFigKey(game, 2);
-    game.figurePositions[1] = { [a]: 'b1' };
-    game.figurePositions[2] = { [d]: 'c1' };
+    const yodaFk = Object.keys(game.figurePositions[2] || {}).find((k) => /yoda/i.test(k))
+      || Object.keys(built.game.figurePositions?.[2] || {}).find((k) => /yoda/i.test(k));
+    assert.ok(yodaFk, 'fixture needs a Yoda to anchor the range check');
+    // REAL coordinates on mos-eisley-outskirts. The old fixture used b1/c1,
+    // which are not spaces on this map at all, so countSpaces returned Infinity
+    // for every pair — fine while nothing measured distance, useless the moment
+    // something did.
+    game.figurePositions[1] = { [a]: 'p5' };
+    game.figurePositions[2] = { [d]: 'o6', [yodaFk]: 'p6' };  // Yoda 1 space from Luke
+    game.thereIsNoTrySourceFigureKey = yodaFk;
     const A = metaFor(dcMessageMeta, game.gameId, 1);
     const D = metaFor(dcMessageMeta, game.gameId, 2);
     const thread = createFakeChannel('tint-thread');
@@ -198,7 +209,7 @@ describe('GATE-BATTERY: There Is No Try resumes the gate after the roll pause', 
       attackerMsgId: A.msgId, attackerDcName: A.meta.dcName, attackerDisplayName: A.meta.dcName,
       attackerFigureIndex: 0, attackerFigureKey: a, attackerConds: [], defenderConds: [],
       target: { msgId: D.msgId, figureKey: d, label: D.meta.dcName },
-      targetSquare: 'c1', targetStats: { defense: ['white'], cost: 5, figures: 1 },
+      targetSquare: 'o6', targetStats: { defense: ['white'], cost: 5, figures: 1 },
       attackInfo: { dice: ['blue', 'green'], type: 'melee' }, isRanged: false, distanceToTarget: 1,
       bonusSurgeAbilities: [], bonusHits: 0, bonusPierce: 0, bonusAccuracy: 0, bonusBlock: 0, bonusEvade: 0,
       surgeConditions: [], bonusConditions: [], surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
@@ -232,5 +243,61 @@ describe('GATE-BATTERY: There Is No Try resumes the gate after the roll pause', 
       break;
     }
     assert.equal(combat._seqStep, 'after_resolve', `TINT gate attack ended at "${combat._seqStep}"`);
+  });
+
+  it('does NOT fire when the roller is more than 4 spaces from Yoda', async () => {
+    // The "within 4 spaces" clause was not enforced at all before 2026-08-31 —
+    // any friendly REBEL FORCE USER qualified from anywhere on the board
+    // (alexanbv: "you must enforce ALL range limits"). This is the negative
+    // control for that fix; without the range check the gate pauses for TINT.
+    const built = createTestGame()
+      .withMap('mos-eisley-outskirts')
+      .withPlayer1Army([{ dcName: 'Stormtrooper' }])
+      .withPlayer2Army([{ dcName: 'Luke Skywalker' }, { dcName: 'Yoda' }])
+      .inRound(1)
+      .build();
+    const { game, dcMessageMeta } = built;
+    const deps = { ...built.deps };
+    const realStats = deps.getDcStats;
+    deps.getDcStats = (n) => {
+      const s = realStats ? realStats(n) : {};
+      if (/luke/i.test(n || '')) return { ...(s || {}), keywords: ['REBEL', 'FORCE USER'] };
+      return s;
+    };
+    game.combatSequenceMode = true;
+    game.selfPlay = true;
+    game.thereIsNoTryPlayerNum = 2;
+
+    const a = firstFigKey(game, 1);
+    const d = firstFigKey(game, 2);
+    const yodaFk = Object.keys(game.figurePositions[2] || {}).find((k) => /yoda/i.test(k));
+    assert.ok(yodaFk, 'fixture needs a Yoda');
+    // Luke defends at o6 with Yoda genuinely 11 spaces away at h8 — REAL
+    // coordinates, so this fails for the right reason. An off-map coordinate
+    // would make countSpaces return Infinity and the test would pass even with
+    // the range check removed.
+    game.figurePositions[1] = { [a]: 'p5' };
+    game.figurePositions[2] = { [d]: 'o6', [yodaFk]: 'h8' };
+    game.thereIsNoTrySourceFigureKey = yodaFk;
+
+    const A = metaFor(dcMessageMeta, game.gameId, 1);
+    const D = metaFor(dcMessageMeta, game.gameId, 2);
+    const thread = createFakeChannel('tint-far-thread');
+    const combat = {
+      gameId: game.gameId, combatThreadId: 'tint-far-thread',
+      attackerPlayerNum: 1, defenderPlayerNum: 2,
+      attackerMsgId: A.msgId, attackerDcName: A.meta.dcName, attackerDisplayName: A.meta.dcName,
+      attackerFigureIndex: 0, attackerFigureKey: a, attackerConds: [], defenderConds: [],
+      target: { msgId: D.msgId, figureKey: d, label: D.meta.dcName },
+      targetSquare: 'o6', targetStats: { defense: ['white'], cost: 5, figures: 1 },
+      attackInfo: { dice: ['blue', 'green'], type: 'melee' }, isRanged: false, distanceToTarget: 1,
+      bonusSurgeAbilities: [], bonusHits: 0, bonusPierce: 0, bonusAccuracy: 0, bonusBlock: 0, bonusEvade: 0,
+      surgeConditions: [], bonusConditions: [], surgeDamage: 0, surgePierce: 0, surgeAccuracy: 0,
+    };
+    game.pendingCombat = combat;
+
+    await runAttackSequence(thread, game, combat, deps);
+    assert.ok(!game.pendingThereIsNoTry, 'Yoda is out of range — TINT must not be offered');
+    assert.notEqual(combat._seqStep, 'roll', 'and the gate must not pause waiting for it');
   });
 });

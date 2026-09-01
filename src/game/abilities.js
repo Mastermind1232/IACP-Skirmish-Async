@@ -16169,9 +16169,22 @@ export function resolveAbility(abilityId, context) {
     const { game, playerNum } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     game.thereIsNoTryPlayerNum = playerNum;
+    // The card reads "a friendly REBEL FORCE USER WITHIN 4 SPACES", measured
+    // from the Yoda that played it, so record which figure that was while
+    // ccPlayedByFigureKey still exists — cc-hand deletes it in a finally as soon
+    // as this resolution ends. The range clause was previously not enforced at
+    // all (alexanbv 2026-08-31: "you must enforce ALL range limits").
+    const _tintSrc = game.ccPlayedByFigureKey;
+    if (_tintSrc && game.figurePositions?.[playerNum]?.[_tintSrc]) {
+      game.thereIsNoTrySourceFigureKey = _tintSrc;
+    } else {
+      // Null, not delete — this key lives in ROUND_NULL_FLAGS, which resets to
+      // null, so a null write keeps the bucket's type contract honest.
+      game.thereIsNoTrySourceFigureKey = null;
+    }
     return {
       applied: true,
-      logMessage: 'This round, when a friendly REBEL FORCE USER rolls dice: set 1 die to any side and convert Dodge results to your choice.',
+      logMessage: 'This round, when a friendly REBEL FORCE USER within 4 spaces of Yoda rolls dice: turn 1 die to any other side and convert Dodge results to your choice.',
     };
   }
 

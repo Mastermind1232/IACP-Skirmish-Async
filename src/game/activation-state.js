@@ -1051,6 +1051,8 @@ const ROUND_NULL_FLAGS = [
   // toughLuckPlayerNum removed 2026-06-18 — Tough Luck no longer arms a
   // round-long player flag; it is a one-shot post-reroll reaction.
   'thereIsNoTryPlayerNum',
+  // The Yoda that played There Is No Try, for its "within 4 spaces" range check.
+  'thereIsNoTrySourceFigureKey',
   'youWillNotDenyMeActive',
   'mandaAsteelPlayerNum',
   // Mandalorian Steel: The Armorer's figure key, captured at play so the
