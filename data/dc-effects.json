@@ -659,7 +659,7 @@
       "keywords": [
         "DROID"
       ],
-      "subname": "ASSASSIN DROID",
+      "subname": "AMBITIOUS DROID",
       "cost": 7,
       "health": 9,
       "speed": 5,
@@ -694,10 +694,34 @@
       ]
     },
     "88-Z": {
-      "abilityText": "",
-      "keywords": [],
+      "abilityText": "Surge (Harass): If this attack does not miss, the target suffers 1 Strain.\n\nRemote: You are not an Imperial figure for mission rules.",
+      "keywords": [
+        "DROID"
+      ],
+      "health": 4,
+      "speed": 3,
+      "defense": null,
+      "attack": {
+        "dice": [
+          "yellow"
+        ],
+        "type": "range"
+      },
       "attachment": false,
-      "companion": true
+      "companion": true,
+      "surgeAbilities": [
+        "accuracy 2",
+        "harass"
+      ],
+      "abilities": [
+        "Pierce 1",
+        "+2 Accuracy",
+        "+1 Damage"
+      ],
+      "passives": [
+        "Mobile",
+        "Remote"
+      ]
     },
     "Agent Blaise": {
       "abilityText": "Adapt: The first time your opponent plays a Command card each round, choose 1 SPY or TROOPER. That figure becomes Hidden\n\nSurge (Interrogate): Look at your opponent's hand and choose a Command card. You may discard a card of equal or greater cost from your hand to discard the chosen card.",
@@ -705,8 +729,8 @@
         "SPY",
         "LEADER"
       ],
-      "subname": "ISB INVESTIGATOR",
-      "cost": 6,
+      "subname": "ISB INTERROGATOR",
+      "cost": 5,
       "health": 8,
       "speed": 4,
       "figures": 1,
@@ -722,9 +746,10 @@
         "black"
       ],
       "surgeAbilities": [
-        "accuracy 3",
-        "pierce 2",
         "damage 1",
+        "damage 1",
+        "pierce 2",
+        "accuracy 3",
         "interrogate"
       ],
       "attachment": false,
@@ -972,9 +997,9 @@
       "figures": 1,
       "attack": {
         "dice": [
-          "red",
           "blue",
-          "blue"
+          "red",
+          "yellow"
         ],
         "type": "range"
       },
@@ -982,6 +1007,7 @@
         "black"
       ],
       "surgeAbilities": [
+        "damage 1",
         "pierce 2"
       ],
       "attachment": false,

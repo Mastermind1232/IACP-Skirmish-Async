@@ -415,3 +415,9 @@ library label is a long descriptive string. Fix: also match on `abilityId`.
 - **File:** `data/dc-effects.json:722-728` (duplicate "damage 1" at :725-726); rendered `src/handlers/combat.js:2787-2795`
 - **Problem:** `surgeAbilities` lists "damage 1" twice (`["accuracy 3","pierce 2","damage 1","damage 1","interrogate"]`), so combat.js renders a phantom second "+1 Damage" surge option not on the card.
 - **Fix:** Remove the duplicate "damage 1" entry from Agent Blaise's `surgeAbilities` array in `data/dc-effects.json`.
+- **REVERSED 2026-08-31 (DC text sweep).** This finding was wrong. The card art
+  (`vassal_extracted/images/dc-figures/Agent Blaise.png`) has a 2x2 surge box
+  reading +1 Damage, +1 Damage, Pierce 2, +3 Accuracy — the second +1 Damage IS
+  printed, like Cal Kestis's two Cleave 2 surges. Both entries restored, and the
+  same pass corrected Blaise's cost (6 -> 5) and subname (ISB INVESTIGATOR ->
+  ISB INTERROGATOR), neither of which this audit checked.

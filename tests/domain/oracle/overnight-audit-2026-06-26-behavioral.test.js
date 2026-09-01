@@ -38,22 +38,43 @@ const req = createRequire(ROOT);
 // DATA INTEGRITY (no engine import needed)
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('LOW: Agent Blaise — no duplicate "damage 1" in surgeAbilities', () => {
-  it('surgeAbilities has exactly one "damage 1" entry', async () => {
+// REVERSED 2026-08-31 during the Deployment Card text sweep.
+//
+// The 2026-06-26 audit recorded this as "surgeAbilities lists 'damage 1' twice,
+// so combat.js renders a phantom second '+1 Damage' surge option NOT ON THE
+// CARD", and removed one. That premise is wrong. The card art at
+// vassal_extracted/images/dc-figures/Agent Blaise.png has a 2x2 surge box whose
+// four cells read: +1 Damage, +1 Damage, Pierce 2, +3 Accuracy. The second
+// +1 Damage is printed, exactly like Cal Kestis's two Cleave 2 surges that
+// alexanbv confirmed as intentional on 2026-05-10.
+//
+// The audit finding was an inference, not a designer ruling — there is no
+// alexanbv citation on it — so it is corrected here to match the printed card.
+describe('LOW: Agent Blaise — the SECOND "+1 Damage" surge is printed on the card', () => {
+  it('surgeAbilities has both "damage 1" entries', async () => {
     const data = JSON.parse(await readFile(new URL('data/dc-effects.json', ROOT), 'utf8'));
     const effects = data.cards || data; // dc-effects.json nests cards under a "cards" key
     const blaise = effects['Agent Blaise'];
     assert.ok(blaise, 'Agent Blaise entry exists');
     const surges = blaise.surgeAbilities || [];
     const dmgOnes = surges.filter((s) => s === 'damage 1');
-    assert.equal(dmgOnes.length, 1, `duplicate "damage 1" — found ${dmgOnes.length}: ${JSON.stringify(surges)}`);
+    assert.equal(dmgOnes.length, 2, `card prints two +1 Damage surge cells; found ${dmgOnes.length}: ${JSON.stringify(surges)}`);
   });
 
-  it('full surgeAbilities list matches canonical card', async () => {
+  it('full surgeAbilities list matches the printed card', async () => {
     const data = JSON.parse(await readFile(new URL('data/dc-effects.json', ROOT), 'utf8'));
     const effects = data.cards || data;
     const surges = effects['Agent Blaise']?.surgeAbilities || [];
-    assert.deepEqual(surges, ['accuracy 3', 'pierce 2', 'damage 1', 'interrogate']);
+    // Reading order of the printed surge box, then the surge named in the text box.
+    assert.deepEqual(surges, ['damage 1', 'damage 1', 'pierce 2', 'accuracy 3', 'interrogate']);
+  });
+
+  it('cost and subname match the printed card', async () => {
+    const data = JSON.parse(await readFile(new URL('data/dc-effects.json', ROOT), 'utf8'));
+    const effects = data.cards || data;
+    const blaise = effects['Agent Blaise'];
+    assert.equal(blaise.cost, 5, 'the deployment badge reads 5');
+    assert.equal(blaise.subname, 'ISB INTERROGATOR');
   });
 });
 
