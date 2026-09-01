@@ -116,12 +116,12 @@ describe('B-CR-TINT: There Is No Try face replacement', () => {
       gameId: 'g1',
       player1Id: 'player1',
       player2Id: 'player2',
-      pendingThereIsNoTry: { pickedDieIdx: 0 },
+      pendingThereIsNoTry: { pickedDieIdx: 0, pickedPool: 'defense', playerNum: 2 },
       pendingCombat: combat,
     };
     const { ctx } = buildCtx(game);
     // face: 1 block, 1 evade, no dodge
-    await handleThereIsNoTry(mockInteraction('there_is_no_try_face_g1_0_1_1_0', 'player2'), ctx);
+    await handleThereIsNoTry(mockInteraction('there_is_no_try_face_g1_defense_0_1_1_0', 'player2'), ctx);
 
     assert.strictEqual(combat.defenseDiceResults[0].block, 1, 'block set to 1');
     assert.strictEqual(combat.defenseDiceResults[0].evade, 1, 'evade set to 1');
@@ -139,12 +139,12 @@ describe('B-CR-TINT: There Is No Try face replacement', () => {
       gameId: 'g1',
       player1Id: 'player1',
       player2Id: 'player2',
-      pendingThereIsNoTry: { pickedDieIdx: 1 },
+      pendingThereIsNoTry: { pickedDieIdx: 1, pickedPool: 'defense', playerNum: 2 },
       pendingCombat: combat,
     };
     const { ctx } = buildCtx(game);
     // face: 0 block, 0 evade, dodge=1 → converted to 0+2=2 block, 0+1=1 evade, dodge=false
-    await handleThereIsNoTry(mockInteraction('there_is_no_try_face_g1_1_0_0_1', 'player2'), ctx);
+    await handleThereIsNoTry(mockInteraction('there_is_no_try_face_g1_defense_1_0_0_1', 'player2'), ctx);
 
     const die1 = combat.defenseDiceResults[1];
     assert.strictEqual(die1.block, 2, 'Dodge conversion: 0+2 = 2 block');
@@ -220,7 +220,7 @@ describe('B-CR-CLEANUP: State cleanup after handlers', () => {
     const combat1 = makeCombat();
     const game1 = {
       gameId: 'g1', player1Id: 'player1', player2Id: 'player2',
-      pendingThereIsNoTry: { pickedDieIdx: 0 },
+      pendingThereIsNoTry: { pickedDieIdx: 0, pickedPool: 'defense', playerNum: 2 },
       pendingCombat: combat1,
     };
     const { ctx: ctx1 } = buildCtx(game1);
@@ -881,5 +881,74 @@ describe('B-CR-INVARIANT: Pending-state and reroll invariants', () => {
       assert.strictEqual(game.pendingCombat?.rerollPhase ?? null, null,
         `${h.name}: rerollPhase should be null when no rerolls remain`);
     }
+  });
+});
+
+// ── B-CR-TINT-ATK: There Is No Try on the ATTACK pool ────────────────────────
+//
+// The card reads "when a friendly REBEL FORCE USER within 4 spaces rolls ANY
+// NUMBER OF DICE". It was implemented over the defense pool only, so playing it
+// on an attack roll silently did nothing — the handler read
+// combat.defenseDiceResults unconditionally and built its face list with
+// getDistinctDieFaces('defense', ...). alexanbv 2026-08-31: "Yoda CC works for
+// attack or defense".
+describe('B-CR-TINT-ATK: There Is No Try turns attack dice too', () => {
+  it('B-CR-TINT-ATK-001: sets the chosen face on an attack die and re-totals', async () => {
+    const combat = makeCombat();
+    const game = {
+      gameId: 'g1',
+      player1Id: 'player1',
+      player2Id: 'player2',
+      pendingThereIsNoTry: { pickedDieIdx: 1, pickedPool: 'attack', playerNum: 1 },
+      pendingCombat: combat,
+    };
+    const { ctx } = buildCtx(game);
+    // Attack faces encode as acc_dmg_surge. Turn die #1 (blue 2a/1d/1s) to 0a/3d/0s.
+    await handleThereIsNoTry(mockInteraction('there_is_no_try_face_g1_attack_1_0_3_0', 'player1'), ctx);
+
+    const die = combat.attackDiceResults[1];
+    assert.strictEqual(die.dmg, 3, 'damage set from the chosen face');
+    assert.strictEqual(die.surge, 0, 'surge set from the chosen face');
+    assert.strictEqual(die.acc, 0, 'accuracy set from the chosen face');
+    assert.strictEqual(die.color, 'blue', 'the die keeps its colour');
+
+    // red 1a/3d/0s + turned 0a/3d/0s + green 0a/2d/1s = 1 acc, 8 dmg, 1 surge
+    assert.strictEqual(combat.attackRoll.dmg, 8, 'attack totals recalculated');
+    assert.strictEqual(combat.attackRoll.surge, 1);
+    assert.strictEqual(combat.attackRoll.acc, 1);
+    assert.ok(game.pendingThereIsNoTry == null, 'pending state cleared');
+    assert.strictEqual(combat.tintResolved, true);
+  });
+
+  it('B-CR-TINT-ATK-002: the defense pool is untouched when turning an attack die', async () => {
+    const combat = makeCombat();
+    const before = JSON.parse(JSON.stringify(combat.defenseDiceResults));
+    const game = {
+      gameId: 'g1',
+      player1Id: 'player1',
+      player2Id: 'player2',
+      pendingThereIsNoTry: { pickedDieIdx: 0, pickedPool: 'attack', playerNum: 1 },
+      pendingCombat: combat,
+    };
+    const { ctx } = buildCtx(game);
+    await handleThereIsNoTry(mockInteraction('there_is_no_try_face_g1_attack_0_0_2_1', 'player1'), ctx);
+
+    assert.deepStrictEqual(combat.defenseDiceResults, before, 'defense dice unchanged');
+    assert.strictEqual(combat.defenseRoll.block, 3, 'defense totals unchanged');
+  });
+
+  it('B-CR-TINT-ATK-003: an attack die never gains a dodge flag', async () => {
+    const combat = makeCombat();
+    const game = {
+      gameId: 'g1',
+      player1Id: 'player1',
+      player2Id: 'player2',
+      pendingThereIsNoTry: { pickedDieIdx: 0, pickedPool: 'attack', playerNum: 1 },
+      pendingCombat: combat,
+    };
+    const { ctx } = buildCtx(game);
+    await handleThereIsNoTry(mockInteraction('there_is_no_try_face_g1_attack_0_0_1_0', 'player1'), ctx);
+    assert.ok(!('dodge' in combat.attackDiceResults[0]) || combat.attackDiceResults[0].dodge === undefined,
+      'dodge is a defense concept and must not leak onto an attack die');
   });
 });

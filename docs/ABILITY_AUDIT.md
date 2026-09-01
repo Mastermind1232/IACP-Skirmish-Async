@@ -842,7 +842,7 @@ Generated: 2026-03-10
 | Unstable Devices | WIRED |
 | Power Converter | WIRED |
 
-### Saw Gerrerra
+### Saw Gerrera
 | Ability | Status |
 |---------|--------|
 | Brutal Tactics | WIRED |

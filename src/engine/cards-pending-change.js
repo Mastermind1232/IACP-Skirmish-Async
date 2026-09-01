@@ -28,6 +28,19 @@ export const CARDS_PENDING_CHANGE = new Set([
   //   Yoda — VERIFIED already correct (cost 5; Calming Presence + Do or Do Not
   //          limited to REBEL FORCE USERS; Force Deflection wired + once/round, correct)
   //   Wookiee Rage / Stimulants — confirmed correct by designer (text unchanged)
+  //
+  // CHANGED SINCE THEIR PRINTED ART (alexanbv 2026-08-31) — the images in
+  // vassal_extracted are SUPERSEDED for these, so do NOT "correct" the data
+  // toward them. They are implemented to the ruling, not the picture:
+  //   74-Z Speeder Bike — Forward Mounted Blasters was REWORKED. The art shows a
+  //     flat "+1 Damage on the same row"; the live rule is: if you can draw a
+  //     straight line of spaces (horizontal OR vertical) from BOTH of the 74-Z's
+  //     spaces to the target, you may reroll 1 attack die, otherwise -1 Damage.
+  //     That is what is implemented at handlers/combat.js:3982.
+  //   Bodhi Rook — Air Support keeps its "and is not Focused" limitation, which
+  //     the art omits. His surge is "+1 Damage" only; the art's "Pierce 1" on
+  //     that cell is not live.
+  //
   // NOTE: K-2SO STAYS (alexanbv 2026-06-16). The new "KX security droid" is a
   // separate card not yet in the DB — nothing to mark for it.
 ]);

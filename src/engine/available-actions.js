@@ -17,7 +17,8 @@ import { getBrokenWallEdges } from '../game/movement.js';
 import { dcNameFromFigureKey, isCompanionHostDefeated, figureHasInTheShadows, figureHasPriorityTarget } from '../game/dc-helpers.js';
 import { getAttackerSurgeAbilities, SURGE_LABELS, parseSurgeEffect } from '../game/combat.js';
 import { getLegalInteractOptions } from '../game/board-helpers.js';
-import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize, getLoadoutCards, hasChooseASideFlamethrower, getDistinctDieFaces } from '../data-loader.js';
+import { isDcCompanion, getDcEffects, getMapTokensData, getFigureSize, getLoadoutCards, hasChooseASideFlamethrower } from '../data-loader.js';
+import { faceOptionsFor, formatFaceLabel, encodeFace } from '../game/die-face-picker.js';
 import { getConfig } from '../game/figure-config.js';
 
 import { getDcEffect } from '../game/dc-helpers.js';
@@ -1091,21 +1092,37 @@ function getCombatActions(game, playerNum, deps) {
     return [];
   }
 
-  // Post-defense-roll reactions
+  // Post-roll There Is No Try reactions.
+  //
+  // Mirrors the interactive picker in handlers/combat.js. The card covers ANY
+  // roll by a friendly REBEL FORCE USER, so both pools are offered and the pool
+  // rides in the customId (alexanbv 2026-08-31: "Yoda CC works for attack or
+  // defense"). This used to enumerate defense dice only.
   if (game.pendingThereIsNoTry) {
     const tint = game.pendingThereIsNoTry;
-    const tintPn = tint.defenderPlayerNum ?? defenderPn;
+    const tintPn = tint.playerNum ?? tint.defenderPlayerNum ?? defenderPn;
     if (playerNum === tintPn) {
       const tintActions = [];
       if (tint.pickedDieIdx == null) {
-        // Step 1: skip or pick a defense die
-        const defDice = combat.defenseDiceResults || [];
-        for (let i = 0; i < defDice.length; i++) {
-          tintActions.push({
-            type: 'there_is_no_try_die',
-            customId: `there_is_no_try_die_${gameId}_${i}`,
-            description: `There Is No Try: Set die #${i + 1} (${defDice[i]?.color || 'white'})`,
-            params: { dieIndex: i },
+        // Step 1: skip, or pick a die from either pool the player rolled.
+        if (combat.defenderPlayerNum === tintPn) {
+          (combat.defenseDiceResults || []).forEach((d, i) => {
+            tintActions.push({
+              type: 'there_is_no_try_die',
+              customId: `there_is_no_try_die_${gameId}_defense_${i}`,
+              description: `There Is No Try: turn defense die #${i + 1} (${d?.color || 'white'})`,
+              params: { pool: 'defense', dieIndex: i },
+            });
+          });
+        }
+        if (combat.attackerPlayerNum === tintPn) {
+          (combat.attackDiceResults || []).forEach((d, i) => {
+            tintActions.push({
+              type: 'there_is_no_try_die',
+              customId: `there_is_no_try_die_${gameId}_attack_${i}`,
+              description: `There Is No Try: turn attack die #${i + 1} (${d?.color || 'blue'})`,
+              params: { pool: 'attack', dieIndex: i },
+            });
           });
         }
         tintActions.push({
@@ -1114,21 +1131,17 @@ function getCombatActions(game, playerNum, deps) {
           description: 'Skip There Is No Try',
         });
       } else {
-        // Step 2: pick a face for the chosen die
+        // Step 2: pick a face for the chosen die, from the canonical face list.
+        const pool = tint.pickedPool === 'attack' ? 'attack' : 'defense';
         const dieIdx = tint.pickedDieIdx;
-        const die = (combat.defenseDiceResults || [])[dieIdx];
-        const color = die?.color || 'white';
-        // Distinct selectable faces from the single canonical source
-        // (data/dice.json via getDistinctDieFaces) — same as the interactive
-        // There Is No Try picker (alexanbv 2026-06-21).
-        const faces = getDistinctDieFaces('defense', color)
-          .map((f) => ({ b: f.block ?? 0, e: f.evade ?? 0, d: f.dodge ? 1 : 0 }));
-        for (const face of faces) {
+        const die = (pool === 'attack' ? combat.attackDiceResults : combat.defenseDiceResults)?.[dieIdx];
+        const color = die?.color || (pool === 'attack' ? 'blue' : 'white');
+        for (const face of faceOptionsFor(pool, color)) {
           tintActions.push({
             type: 'there_is_no_try_face',
-            customId: `there_is_no_try_face_${gameId}_${dieIdx}_${face.b}_${face.e}_${face.d}`,
-            description: `Set to ${face.b}B/${face.e}E${face.d ? '/Dodge' : ''}`,
-            params: { dieIndex: dieIdx, block: face.b, evade: face.e, dodge: face.d },
+            customId: `there_is_no_try_face_${gameId}_${pool}_${dieIdx}_${encodeFace(pool, face)}`,
+            description: `Set to ${formatFaceLabel(pool, face)}`,
+            params: { pool, dieIndex: dieIdx, ...face },
           });
         }
       }

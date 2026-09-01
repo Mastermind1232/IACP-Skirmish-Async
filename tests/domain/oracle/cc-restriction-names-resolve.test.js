@@ -12,12 +12,15 @@
  *   Guerilla Warfare playableBy "Saw Gerrera"   vs DC key "Saw Gerrerra"
  *
  * The printed cards read "Zeb Orrelios" and "Saw Gerrera", so Karabast! was the
- * misspelled side (fixed) and the Saw Gerrerra DC KEY is the misspelled side.
- * Renaming a DC key touches data/dc-images.json, data/figure-images.json,
- * data/figure-sizes.json, data/destruct-test-decks.json and docs/combat-spec.csv,
- * so it is left for alexanbv to approve. Saw is listed as a known exception here
- * rather than silently skipped, so the day the rename lands this test fails and
- * the exception gets removed.
+ * misspelled side and the Saw Gerrerra DC KEY was the misspelled side. Both are
+ * fixed: alexanbv approved the rename on 2026-08-31 ("all of saw stuff should be
+ * Saw Gerrera spelling"), so the key was renamed across dc-effects.json,
+ * dc-images.json, figure-images.json, figure-sizes.json, destruct-test-decks.json
+ * and docs/combat-spec.csv. The image FILE names on disk still read "Gerrerra",
+ * so the paths those maps point at were deliberately left alone.
+ *
+ * AWAITING_RENAME is now empty and should stay that way — an entry in it is a
+ * card that cannot be played by its own figure.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
@@ -60,7 +63,7 @@ function buildTraitVocabulary(dc) {
  * Known-broken, awaiting a designer decision. Keep this EMPTY if you can — an
  * entry here is a card that cannot be played by its own figure.
  */
-const AWAITING_RENAME = new Set(['Guerilla Warfare']);
+const AWAITING_RENAME = new Set();
 
 describe('figure-restricted CCs name a real Deployment Card', () => {
   const cc = load('data/cc-effects.json');

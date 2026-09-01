@@ -5917,33 +5917,33 @@ describe('Savage Vigor — condition traces', () => {
   });
 });
 
-describe('Saw Gerrerra — condition traces', () => {
+describe('Saw Gerrera — condition traces', () => {
   it('Brutal Tactics p1: conditional guard — smoke only (no crash)', () => {
-    const row = { card: 'Saw Gerrerra', ability: 'Brutal Tactics', part: '1', affects_self: 'FALSE', affects_others: 'a hostile figure within 3 spaces of the defeated figure', attack_side: 'None', conditional: '', limit: '' };
+    const row = { card: 'Saw Gerrera', ability: 'Brutal Tactics', part: '1', affects_self: 'FALSE', affects_others: 'a hostile figure within 3 spaces of the defeated figure', attack_side: 'None', conditional: '', limit: '' };
     assert.doesNotThrow(() => conditionForRow(row)(G, {}));
   });
   it('Wanton Destruction p1: conditional guard — smoke only (no crash)', () => {
-    const row = { card: 'Saw Gerrerra', ability: 'Wanton Destruction', part: '1', affects_self: 'FALSE', affects_others: 'up to 2 figures other than the defender within 2 spaces of the target space', attack_side: 'attacker', conditional: '', limit: '' };
+    const row = { card: 'Saw Gerrera', ability: 'Wanton Destruction', part: '1', affects_self: 'FALSE', affects_others: 'up to 2 figures other than the defender within 2 spaces of the target space', attack_side: 'attacker', conditional: '', limit: '' };
     assert.doesNotThrow(() => conditionForRow(row)(G, {}));
   });
   it('+2 Accuracy p1: affects_self=TRUE → fires when owner is active', () => {
-    const cond = conditionForRow({ card: 'Saw Gerrerra', ability: '+2 Accuracy', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
-    assert.ok(cond(G, { attackerDcName: 'Saw Gerrerra', attackerPlayerNum: 1 }), 'owner active → fires');
+    const cond = conditionForRow({ card: 'Saw Gerrera', ability: '+2 Accuracy', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
+    assert.ok(cond(G, { attackerDcName: 'Saw Gerrera', attackerPlayerNum: 1 }), 'owner active → fires');
     assert.ok(!cond(G, { attackerDcName: 'Random Figure', attackerPlayerNum: 1 }), 'non-owner → blocked');
   });
   it('+1 Surge p1: affects_self=TRUE → fires when owner is active', () => {
-    const cond = conditionForRow({ card: 'Saw Gerrerra', ability: '+1 Surge', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
-    assert.ok(cond(G, { attackerDcName: 'Saw Gerrerra', attackerPlayerNum: 1 }), 'owner active → fires');
+    const cond = conditionForRow({ card: 'Saw Gerrera', ability: '+1 Surge', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
+    assert.ok(cond(G, { attackerDcName: 'Saw Gerrera', attackerPlayerNum: 1 }), 'owner active → fires');
     assert.ok(!cond(G, { attackerDcName: 'Random Figure', attackerPlayerNum: 1 }), 'non-owner → blocked');
   });
   it('Surge: +2 Damage p1: affects_self=TRUE → fires when owner is active', () => {
-    const cond = conditionForRow({ card: 'Saw Gerrerra', ability: 'Surge: +2 Damage', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
-    assert.ok(cond(G, { attackerDcName: 'Saw Gerrerra', attackerPlayerNum: 1 }), 'owner active → fires');
+    const cond = conditionForRow({ card: 'Saw Gerrera', ability: 'Surge: +2 Damage', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
+    assert.ok(cond(G, { attackerDcName: 'Saw Gerrera', attackerPlayerNum: 1 }), 'owner active → fires');
     assert.ok(!cond(G, { attackerDcName: 'Random Figure', attackerPlayerNum: 1 }), 'non-owner → blocked');
   });
   it('Surge: you become Hidden p1: affects_self=TRUE → fires when owner is active', () => {
-    const cond = conditionForRow({ card: 'Saw Gerrerra', ability: 'Surge: you become Hidden', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
-    assert.ok(cond(G, { attackerDcName: 'Saw Gerrerra', attackerPlayerNum: 1 }), 'owner active → fires');
+    const cond = conditionForRow({ card: 'Saw Gerrera', ability: 'Surge: you become Hidden', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
+    assert.ok(cond(G, { attackerDcName: 'Saw Gerrera', attackerPlayerNum: 1 }), 'owner active → fires');
     assert.ok(!cond(G, { attackerDcName: 'Random Figure', attackerPlayerNum: 1 }), 'non-owner → blocked');
   });
 });

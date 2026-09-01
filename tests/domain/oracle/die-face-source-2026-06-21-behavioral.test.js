@@ -40,12 +40,22 @@ describe('getDistinctDieFaces — single source of die faces', () => {
   });
 
   it('There Is No Try pickers no longer hardcode a face list', () => {
-    // Guard against regression: the two There Is No Try face sources must use the
-    // shared helper, not an inline [{ block/b: ... }] literal array.
+    // Guard against regression: the two There Is No Try face sources must derive
+    // their faces from data/dice.json, not an inline [{ block/b: ... }] literal.
+    //
+    // 2026-08-31: both now reach it through `faceOptionsFor` in
+    // src/game/die-face-picker.js, the shared picker Rapid Recalibration also
+    // uses, rather than calling getDistinctDieFaces themselves. Accept either,
+    // since the point is the single source and not the call site.
     const reactions = fs.readFileSync(path.join(ROOT, 'src/handlers/combat-reactions.js'), 'utf8');
     const actions = fs.readFileSync(path.join(ROOT, 'src/engine/available-actions.js'), 'utf8');
-    assert.ok(reactions.includes('getDistinctDieFaces'), 'combat-reactions derives faces from the source');
-    assert.ok(actions.includes('getDistinctDieFaces'), 'available-actions derives faces from the source');
+    const derivesFaces = (src) => /getDistinctDieFaces|faceOptionsFor/.test(src);
+    assert.ok(derivesFaces(reactions), 'combat-reactions derives faces from the canonical source');
+    assert.ok(derivesFaces(actions), 'available-actions derives faces from the canonical source');
     assert.ok(!/\[\{ *b: *0, *e: *0, *d: *0 \}/.test(actions), 'no hardcoded {b,e,d} face array remains');
+
+    // ...and the shared picker really is backed by the canonical source.
+    const picker = fs.readFileSync(path.join(ROOT, 'src/game/die-face-picker.js'), 'utf8');
+    assert.ok(picker.includes('getDistinctDieFaces'), 'die-face-picker reads data/dice.json via getDistinctDieFaces');
   });
 });

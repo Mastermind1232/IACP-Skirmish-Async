@@ -5,7 +5,7 @@ import { opponentPlayerNum, getPlayerId, getDcList, getCcHand, ccHandKey, ccDisc
 import { reduceHp, dcNameFromFigureKey, awardKillVp, applyCondition, isConditionImmune, checkNefariousGains } from '../game/index.js';
 import { filterCondition } from '../game/conditions.js';
 import { getDcEffect } from '../game/dc-helpers.js';
-import { getDistinctDieFaces } from '../data-loader.js';
+import { faceOptionsFor, formatFaceLabel, encodeFace, decodeFace, applyFaceToDie, totalsFor, formatTotals } from '../game/die-face-picker.js';
 import { applyDamage as _applyDamage } from '../game/damage-pipeline.js';
 import { removeForceExhaustionDie } from '../game/force-exhaustion-helpers.js';
 import { requireGame, requirePlayer } from '../utils/guards.js';
@@ -27,7 +27,18 @@ export async function handleThereIsNoTry(interaction, ctx) {
     getGame, canActAsPlayer, saveGames, client,
   } = ctx;
 
-  // There Is No Try: die picker → face picker → apply, then enter reroll window
+  // There Is No Try: die picker -> face picker -> apply, then enter reroll window.
+  //
+  // The card reads "Use when a friendly REBEL FORCE USER within 4 spaces rolls
+  // ANY NUMBER OF DICE. Choose one of those dice and turn it to any other side."
+  // It was implemented over the DEFENSE pool only, so playing it on an attack
+  // roll did nothing at all. alexanbv 2026-08-31: "Yoda CC works for attack or
+  // defense". The pool now rides in the customId and the face maths comes from
+  // the shared die-face picker, the same one Rapid Recalibration uses.
+  //
+  // customId: there_is_no_try_die_<gameId>_<pool>_<idx>
+  //           there_is_no_try_face_<gameId>_<pool>_<idx>_<a>_<b>_<c>
+  //           there_is_no_try_skip_<gameId>
   const type = interaction.customId.startsWith('there_is_no_try_die_') ? 'die'
     : interaction.customId.startsWith('there_is_no_try_face_') ? 'face' : 'skip';
   const parts = splitCustomId(interaction.customId, `there_is_no_try_${type}_`);
@@ -36,50 +47,56 @@ export async function handleThereIsNoTry(interaction, ctx) {
   if (!game) return;
   const combat = game.pendingCombat;
   const defNum = combat?.defenderPlayerNum ?? opponentPlayerNum(combat?.attackerPlayerNum);
-  if (!await requirePlayer(interaction, game, interaction.user.id, defNum, canActAsPlayer, 'Only the defender may respond.')) return;
+  const tintPn = game.pendingThereIsNoTry?.playerNum ?? defNum;
+  if (!await requirePlayer(interaction, game, interaction.user.id, tintPn, canActAsPlayer, 'Only the There Is No Try player may respond.')) return;
   if (!game.pendingThereIsNoTry && type !== 'skip') {
     await interaction.followUp({ content: 'No pending There Is No Try.', ephemeral: true }).catch(discordCatch); return;
   }
   const thread = await fetchCombatThread(client, combat?.combatThreadId);
+
+  /** The live dice array for a pool, so a face pick writes back to the real roll. */
+  const poolDice = (pool) => (pool === 'attack' ? combat?.attackDiceResults : combat?.defenseDiceResults) || [];
+
   if (type === 'die') {
-    const dieIdx = parseInt(parts[1], 10);
-    const defDice = combat?.defenseDiceResults || [];
-    const die = defDice[dieIdx];
+    const pool = parts[1] === 'attack' ? 'attack' : 'defense';
+    const dieIdx = parseInt(parts[2], 10);
+    const die = poolDice(pool)[dieIdx];
     if (!die) { await interaction.followUp({ content: 'Die not found.', ephemeral: true }).catch(discordCatch); return; }
     game.pendingThereIsNoTry.pickedDieIdx = dieIdx;
-    // Build face options based on die color (white/black)
-    const color = die.color || 'white';
-    // Selectable faces come from the single canonical source (data/dice.json via
-    // getDistinctDieFaces) so "set to any face" always lists the die's REAL
-    // faces (alexanbv 2026-06-21). White has a Dodge face; black does not.
-    const faceOptions = getDistinctDieFaces('defense', color);
-    const faceBtns = faceOptions.map((face) =>
+    game.pendingThereIsNoTry.pickedPool = pool;
+    // Faces come from the canonical source (data/dice.json) so "any other side"
+    // lists the die's REAL faces (alexanbv 2026-06-21).
+    const color = die.color || (pool === 'attack' ? 'blue' : 'white');
+    const faceBtns = faceOptionsFor(pool, color).map((face) =>
       new ButtonBuilder()
-        .setCustomId(`there_is_no_try_face_${gameId}_${dieIdx}_${face.block ?? 0}_${face.evade ?? 0}_${face.dodge ? 1 : 0}`)
-        .setLabel(`${face.block ?? 0}B/${face.evade ?? 0}E${face.dodge ? '/Dodge' : ''}`.slice(0, 80))
+        .setCustomId(`there_is_no_try_face_${gameId}_${pool}_${dieIdx}_${encodeFace(pool, face)}`)
+        .setLabel(formatFaceLabel(pool, face).slice(0, 80))
         .setStyle(ButtonStyle.Primary)
     );
-    if (thread) await thread.send({ content: `**There Is No Try** — Choose any face for die #${dieIdx + 1} (${color}):`, components: chunkButtonsToRows(faceBtns) }).catch(discordCatch);
+    if (thread) await thread.send({ content: `**There Is No Try** — Choose any face for ${pool} die #${dieIdx + 1} (${color}):`, components: chunkButtonsToRows(faceBtns) }).catch(discordCatch);
     saveGames(game.gameId); return;
   }
+
   if (type === 'face') {
-    const dieIdx = parseInt(parts[1], 10);
-    const block = parseInt(parts[2], 10) || 0;
-    const evade = parseInt(parts[3], 10) || 0;
-    const dodgeFlag = parseInt(parts[4], 10) === 1;
-    const defDice = combat?.defenseDiceResults || [];
-    if (defDice[dieIdx]) {
-      const old = defDice[dieIdx];
-      // Apply chosen face; convert any Dodge results on this die to Block+Block+Evade
-      defDice[dieIdx] = { ...old, block, evade, dodge: dodgeFlag };
-      // Convert Dodge on this die to +2 Block +1 Evade (no dice dodge result)
-      if (dodgeFlag) {
-        defDice[dieIdx] = { ...old, block: block + 2, evade: evade + 1, dodge: false };
+    const pool = parts[1] === 'attack' ? 'attack' : 'defense';
+    const dieIdx = parseInt(parts[2], 10);
+    const face = decodeFace(pool, parts.slice(3));
+    const dice = poolDice(pool);
+    if (dice[dieIdx]) {
+      const before = formatFaceLabel(pool, dice[dieIdx]);
+      // Defense only: a chosen Dodge face converts to +2 Block / +1 Evade, which
+      // is what the card does instead of letting the dodge cancel the attack.
+      dice[dieIdx] = applyFaceToDie(pool, dice[dieIdx], face);
+      const totals = totalsFor(pool, dice);
+      if (pool === 'attack') {
+        combat.attackDiceResults = dice;
+        combat.attackRoll = { ...(combat.attackRoll || {}), ...totals };
+      } else {
+        combat.defenseDiceResults = dice;
+        combat.defenseRoll = { block: totals.block, evade: totals.evade, dodge: totals.dodge };
       }
-      combat.defenseDiceResults = defDice;
-      const newTotal = defDice.reduce((acc, d) => ({ block: acc.block + (d.block ?? 0), evade: acc.evade + (d.evade ?? 0), dodge: acc.dodge + (d.dodge ? 1 : 0) }), { block: 0, evade: 0, dodge: 0 });
-      combat.defenseRoll = { block: newTotal.block, evade: newTotal.evade, dodge: newTotal.dodge };
-      if (thread) await thread.send(`**There Is No Try** — Die set to ${block}B/${evade}E${dodgeFlag ? ' (Dodge→+2B+1E)' : ''}. New defense totals: ${combat.defenseRoll.block} block, ${combat.defenseRoll.evade} evade.`).catch(discordCatch);
+      const dodgeNote = (pool === 'defense' && face.dodge) ? ' (Dodge to +2 Block +1 Evade)' : '';
+      if (thread) await thread.send(`**There Is No Try** — ${pool} die #${dieIdx + 1} turned from ${before} to ${formatFaceLabel(pool, face)}${dodgeNote}. New ${pool} results: ${formatTotals(pool, totals)}.`).catch(discordCatch);
     }
     clearPendingThereIsNoTry(game);
     combat.tintResolved = true;
@@ -89,6 +106,7 @@ export async function handleThereIsNoTry(interaction, ctx) {
     combat.tintResolved = true;
     if (thread) await thread.send('**There Is No Try** — Skipped.').catch(discordCatch);
   }
+
   // After TINT resolves (face set or skipped): enter reroll window.
   // Gate cutover (alexanbv 2026-06-16): on a gate attack the roll step paused
   // for TINT — resume by advancing the sequence into the rerolls window (the

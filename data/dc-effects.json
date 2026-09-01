@@ -709,6 +709,7 @@
       },
       "attachment": false,
       "companion": true,
+      "campaignOnly": true,
       "surgeAbilities": [
         "accuracy 2",
         "harass"
@@ -5751,8 +5752,8 @@
         "+2 Accuracy"
       ]
     },
-    "Saw Gerrerra": {
-      "abilityText": "Brutal Tactics: Once per round, when a hostile figure is defeated, choose a hostile figure within 3 spaces of the defeated figure's space. The chose figure becomes weakend.\n\nWanton Destruction: After a friendly resolves an attack, you may discard 1 Command card from your hand to choose up to 2 figures other than the defender within 2 spaces of the target space. Those figures suffer 1 Damage.",
+    "Saw Gerrera": {
+      "abilityText": "Brutal Tactics: Once per round, when a hostile figure is defeated, choose a hostile figure within 3 spaces of the defeated figure's space. The chosen figure becomes Weakened.\n\nWanton Destruction: After a friendly resolves an attack, you may discard 1 Command card from your hand to choose up to 2 figures other than the defender within 2 spaces of the target space. Those figures suffer 1 Damage.",
       "keywords": [
         "LEADER"
       ],

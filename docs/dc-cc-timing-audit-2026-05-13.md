@@ -1868,7 +1868,7 @@ correct stage. Use this as a starting point — search for ⚠️ or
 - **Power Converter** — _Passive/Unclassified_ — — — impl: src/engine/available-actions.js:1024, src/engine/available-actions.js:1025, src/handlers/combat-reactions.js:564, src/handlers/combat-reactions.js:574
   > Power Converter: Once per round, while a friendly figure with a Device token is attacking, it may reroll 1 attack die. Before rerolling, you may replace that die with another attack die of any color. It is considered rer…
 
-### Saw Gerrerra
+### Saw Gerrera
 - **Brutal Tactics** — _On-defeat_ — ✓ — impl: src/game/damage-pipeline-hooks.js:1269, src/game/damage-pipeline-hooks.js:1277, src/handlers/defeat-pick.js:29
   > Brutal Tactics: Once per round, when a hostile figure is defeated, choose a hostile figure within 3 spaces of the defeated figure's space. The chose figure becomes weakend.
 - **Wanton Destruction** — _Passive/Unclassified_ — — — impl: src/engine/combat-bridge.js:3017, src/handlers/after-attack-fire.js:1287, src/handlers/after-attack-fire.js:1686, src/handlers/after-attack-resolve.js:418

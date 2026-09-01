@@ -2,7 +2,7 @@
 
 Scope: DCs alphabetical after Royal Guard (Elite), 10 cards: Royal
 Guard (Regular), Royal Guard Champion, SC2-M Repulsor Tank, Sabine
-Wren, Salacious B. Crumb, Saska Teft, Saw Gerrerra, Scout Trooper
+Wren, Salacious B. Crumb, Saska Teft, Saw Gerrera, Scout Trooper
 (Elite), Second Sister, Sentry Droid (Elite).
 
 Verdicts: ✅ correct | ⚠️ suspicious | ❌ wrong-stage | — no impl
@@ -92,7 +92,7 @@ Verdicts: ✅ correct | ⚠️ suspicious | ❌ wrong-stage | — no impl
 
 ---
 
-## Saw Gerrerra
+## Saw Gerrera
 
 **Brutal Tactics (passive)** — "Once per round, when a hostile figure is defeated, choose a hostile figure within 3 spaces of the defeated figure's space. The chose figure becomes weakend."
 - Impl: NO `brutal_tactics_saw` id; passives include "Brutal Tactics". May be wired through the WHEN_DEFEATED pipeline + auto-apply hooks.
@@ -168,7 +168,7 @@ Verdicts: ✅ correct | ⚠️ suspicious | ❌ wrong-stage | — no impl
 
 2. **Saska Teft Power Converter "replace + reroll"** — the rule lets the player replace a die with a different-color die BEFORE the reroll. That's a 2-step interaction (replace → reroll). Worth a click-through.
 
-3. **Saw Gerrerra Brutal Tactics on ANY hostile defeat** — not Saw-attack-only. WHEN_DEFEATED hook needs to fire on EVERY hostile defeat (any source) and offer Weaken picker.
+3. **Saw Gerrera Brutal Tactics on ANY hostile defeat** — not Saw-attack-only. WHEN_DEFEATED hook needs to fire on EVERY hostile defeat (any source) and offer Weaken picker.
 
 4. **Scout Trooper Camouflage 4-space LoS gate** — bidirectional rule: attackers ≥4 can't see Scout, AND Scout doesn't block their LoS to others. Verify both directions.
 

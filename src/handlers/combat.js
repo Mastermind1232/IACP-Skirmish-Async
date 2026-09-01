@@ -5453,23 +5453,48 @@ export async function handleCombatRoll(interaction, ctx) {
       await thread.send(`${_defRollContent}  [${diceDetail}]`).catch(discordCatch);
     }
 
-    // There Is No Try (TINT): if thereIsNoTryPlayerNum is set for the defender, and the defending DC has REBEL + FORCE USER keywords
-    if (game.thereIsNoTryPlayerNum === defenderPlayerNum && !combat.tintResolved) {
-      const _tintDefDcName = dcNameFromFigureKey(combat.target?.figureKey || '');
-      const _tintStats = ctx.getDcStats?.(_tintDefDcName) || {};
-      const _tintAllKws = [...(_tintStats.keywords || []), ...(_tintStats.traits || [])].map((k) => String(k).toUpperCase());
-      if (_tintAllKws.includes('REBEL') && _tintAllKws.includes('FORCE USER')) {
-        setPendingThereIsNoTry(game, { defenderPlayerNum });
-        const _tintDice = combat.defenseDiceResults || [];
-        const _tintBtns = _tintDice.map((d, i) =>
-          new ButtonBuilder()
-            .setCustomId(`there_is_no_try_die_${gameId}_${i}`)
-            .setLabel(`Die #${i + 1}: ${d.block}B/${d.evade}E${d.dodge ? '/Dodge' : ''}`.slice(0, 80))
-            .setStyle(ButtonStyle.Primary)
-        );
+    // There Is No Try (TINT). The card reads "when a friendly REBEL FORCE USER
+    // within 4 spaces rolls ANY NUMBER OF DICE" — so it covers the ATTACK roll
+    // as well as the defense roll. It used to offer defense dice only, so
+    // playing it on an attack did nothing (alexanbv 2026-08-31: "Yoda CC works
+    // for attack or defense"). Both pools are rolled by this point, so both are
+    // offered here, each gated on ITS OWN roller being a friendly REBEL FORCE
+    // USER of the There Is No Try player.
+    //
+    // NOTE: the "within 4 spaces of Yoda" clause is still not enforced, here or
+    // before — pre-existing, called out rather than silently carried.
+    if (game.thereIsNoTryPlayerNum && !combat.tintResolved) {
+      const _tintPn = game.thereIsNoTryPlayerNum;
+      const _tintIsRebelForceUser = (figureKey) => {
+        const _n = dcNameFromFigureKey(figureKey || '');
+        if (!_n) return false;
+        const _st = ctx.getDcStats?.(_n) || {};
+        const _kws = [...(_st.keywords || []), ...(_st.traits || [])].map((k) => String(k).toUpperCase());
+        return _kws.includes('REBEL') && _kws.includes('FORCE USER');
+      };
+      const _tintBtns = [];
+      // Defense dice — offered when the DEFENDER is the TINT player's REBEL FORCE USER.
+      if (defenderPlayerNum === _tintPn && _tintIsRebelForceUser(combat.target?.figureKey)) {
+        (combat.defenseDiceResults || []).forEach((d, i) => {
+          _tintBtns.push(new ButtonBuilder()
+            .setCustomId(`there_is_no_try_die_${gameId}_defense_${i}`)
+            .setLabel(`Def #${i + 1}: ${d.block}B/${d.evade}E${d.dodge ? '/Dodge' : ''}`.slice(0, 80))
+            .setStyle(ButtonStyle.Primary));
+        });
+      }
+      // Attack dice — offered when the ATTACKER is the TINT player's REBEL FORCE USER.
+      if (attackerPlayerNum === _tintPn && _tintIsRebelForceUser(combat.attackerFigureKey)) {
+        (combat.attackDiceResults || []).forEach((d, i) => {
+          _tintBtns.push(new ButtonBuilder()
+            .setCustomId(`there_is_no_try_die_${gameId}_attack_${i}`)
+            .setLabel(`Atk #${i + 1}: ${d.dmg || 0}d/${d.surge || 0}s/${d.acc || 0}a`.slice(0, 80))
+            .setStyle(ButtonStyle.Primary));
+        });
+      }
+      if (_tintBtns.length) {
+        setPendingThereIsNoTry(game, { defenderPlayerNum, playerNum: _tintPn });
         _tintBtns.push(new ButtonBuilder().setCustomId(`there_is_no_try_skip_${gameId}`).setLabel('Skip').setStyle(ButtonStyle.Secondary));
-        const _tintRows = chunkButtonsToRows(_tintBtns);
-        await thread.send({ content: `**There Is No Try** — <@${game[`player${defenderPlayerNum}Id`] ?? ''}> choose a defense die to set to any face:`, components: _tintRows }).catch(discordCatch);
+        await thread.send({ content: `**There Is No Try** — <@${game[`player${_tintPn}Id`] ?? ''}> choose a die to turn to any other side:`, components: chunkButtonsToRows(_tintBtns) }).catch(discordCatch);
         saveGames(game.gameId);
         return; // Wait for TINT response before entering reroll window
       }
