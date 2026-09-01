@@ -89,3 +89,60 @@ describe('Disable is the IACP card', () => {
     assert.deepStrictEqual(game.disabledFigures, [DISPLAY], 'only the Disabled card ends it');
   });
 });
+
+/**
+ * Disarm (Krrsantan) — the Weakened lock is permanent for the rest of the game.
+ *
+ * alexanbv 2026-08-31: "Disarm is permanent for the rest of game."
+ *
+ * The card prints no duration ("...becomes Weakened, and can't discard the
+ * Weakened condition"), but the lock was being reset in TWO places — at round
+ * start via ROUND_OBJECT_FLAGS, and at end-of-round via
+ * clearUntilEndOfRoundFlags — so it never outlived the round it landed in.
+ * Removing only one of the two would have been a silent no-op, which is what
+ * these tests pin.
+ */
+describe('Disarm lock is game-persistent', () => {
+  test('a round boundary does not clear it', async () => {
+    const { default: fs } = await import('node:fs');
+    const { fileURLToPath } = await import('node:url');
+    const src = fs.readFileSync(
+      fileURLToPath(new URL('./activation-state.js', import.meta.url)), 'utf8',
+    );
+    const list = src.slice(src.indexOf('const ROUND_OBJECT_FLAGS = ['));
+    const body = list.slice(0, list.indexOf('];'));
+    assert.ok(
+      !/^\s*'disarmPermanentWeakened',/m.test(body),
+      'disarmPermanentWeakened must not be round-scoped — Disarm is permanent',
+    );
+  });
+
+  test('the end-of-round sweep does not clear it', async () => {
+    const { clearUntilEndOfRoundFlags } = await import('../handlers/round.js');
+    const game = { disarmPermanentWeakened: { 'Stormtrooper-1-0': true } };
+    clearUntilEndOfRoundFlags(game);
+    assert.deepStrictEqual(
+      game.disarmPermanentWeakened,
+      { 'Stormtrooper-1-0': true },
+      'the lock must survive the end-of-round sweep',
+    );
+  });
+
+  test('conditions.js refuses to remove a locked Weaken', async () => {
+    const { filterCondition } = await import('./conditions.js');
+    const game = {
+      figureConditions: { 'Stormtrooper-1-0': ['Weaken', 'Stun'] },
+      disarmPermanentWeakened: { 'Stormtrooper-1-0': true },
+    };
+    filterCondition(game, 'Stormtrooper-1-0', 'Weaken');
+    assert.ok(
+      game.figureConditions['Stormtrooper-1-0'].includes('Weaken'),
+      'Weaken must not be removable while Disarm holds the lock',
+    );
+    filterCondition(game, 'Stormtrooper-1-0', 'Stun');
+    assert.ok(
+      !game.figureConditions['Stormtrooper-1-0'].includes('Stun'),
+      'other conditions are unaffected by the lock',
+    );
+  });
+});

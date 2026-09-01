@@ -2,7 +2,7 @@
  * Oracle tests for Emperor Palpatine — Tempt.
  *
  * Rule: At the start of your activation, a figure of your choice suffers
- *       1 Damage and gains 1 Hit Token (Damage power token).
+ *       1 Damage and gains 1 Damage Token (Damage power token).
  *
  * Confirmed-safe core:
  *   - Tempt applies 1 HP damage via dcHealthState (not just power token grant)

@@ -392,7 +392,7 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
     }
   }
   // Per-figure attacker round-modifier evaluation (alexanbv 2026-06-20). Replaces
-  // the old per-player roundTrooperAttackHitBonus. Cavalry Charge's +1 Hit now
+  // the old per-player roundTrooperAttackHitBonus. Cavalry Charge's +1 Damage now
   // applies only when THIS attacking figure is a TROOPER within 3 spaces of the
   // card-playing figure. Surge (Smuggled Supplies) and reroll (Just Business /
   // Battlefield Awareness) eligibility are evaluated PER-FIGURE at their own
@@ -408,11 +408,11 @@ export async function resolveCombatAfterRolls(game, combat, client, deps) {
     });
     if (_atkMods.hit) combat.bonusHits = (combat.bonusHits || 0) + _atkMods.hit;
   }
-  // Query (HK-47): if +1 Hit was applied but defender became Bleeding from surges, remove the bonus
+  // Query (HK-47): if +1 Damage was applied but defender became Bleeding from surges, remove the bonus
   if (combat.queryBonusHitApplied && (combat.surgeConditions || []).includes('Bleed')) {
     combat.bonusHits = Math.max(0, (combat.bonusHits || 0) - 1);
     combat.queryBonusHitApplied = false;
-    await logGameAction(game, client, '**Query** — +1 Hit removed (defender became Bleeding).', { phase: 'ROUND', icon: 'attack' });
+    await logGameAction(game, client, '**Query** — +1 Damage removed (defender became Bleeding).', { phase: 'ROUND', icon: 'attack' });
   }
   // Line of Fire (Anchorhead B) crateBlockSink prompt is now wired
   // at the modifier step inside src/handlers/combat.js proceedAfterRerolls
@@ -2690,7 +2690,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
     }
     delete game.coordinatedAttackPair;
   }
-  // Multi-Fire: after first attack, enforce different target + apply -1 Hit for second attack
+  // Multi-Fire: after first attack, enforce different target + apply -1 Damage for second attack
   if (game.multiFireActive?.[combat.attackerFigureKey]) {
     const mf = game.multiFireActive[combat.attackerFigureKey];
     mf.attacksRemaining -= 1;
@@ -2699,7 +2699,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       // Block same target for second attack
       game.multiFireBlockedTarget = game.multiFireBlockedTarget || {};
       game.multiFireBlockedTarget[combat.attackerFigureKey] = combat.defenderFigureKey;
-      // Apply -1 Hit to second attack too. Per alexanbv 2026-05-13: figureKey-keyed.
+      // Apply -1 Damage to second attack too. Per alexanbv 2026-05-13: figureKey-keyed.
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[combat.attackerFigureKey] = { bonusHits: -1 };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
@@ -2710,7 +2710,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       if (game.multiFireBlockedTarget?.[combat.attackerFigureKey]) delete game.multiFireBlockedTarget[combat.attackerFigureKey];
     }
   }
-  // Overheated (Paz Vizsla): -1 Hit re-stamped for 2nd attack; attack
+  // Overheated (Paz Vizsla): -1 Damage re-stamped for 2nd attack; attack
   // type flips to Melee after BOTH attacks complete (per CRR last-thing
   // ordering). Ranged for both attacks; swap is the closing step.
   // Per IACP rule 2026-05-09: keyed per-figureKey so each figure in a
@@ -2724,7 +2724,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
       game.pendingOverrideAttackDice[combat.attackerFigureKey] = { bonusHits: -1, source: 'Overheated' };
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[combat.attackerFigureKey] = { from: 'Overheated' };
-      await _postAttackerChainButton(`**Overheated** — 1 Ranged attack remaining (−1 Hit). Declare it below.`);
+      await _postAttackerChainButton(`**Overheated** — 1 Ranged attack remaining (−1 Damage). Declare it below.`);
     } else {
       delete game.overheatedActive[combat.attackerFigureKey];
       // Last thing: attack type becomes Melee for the rest of the round.
@@ -2753,7 +2753,7 @@ export async function finishCombatResolution(game, combat, resultText, embedRefr
 
   // Bladestorm inline disabled 2026-05-09 → fireBladestorm (step-8 attacker
   // button, routes through applyDamage so when-damaged hooks fire).
-  // Blood Feud: check if defender's DC has a persistent Blood Feud marker → auto +1 Hit
+  // Blood Feud: check if defender's DC has a persistent Blood Feud marker → auto +1 Damage
   if (combat.hit && game.bloodFeudTargets?.[combat.defenderMsgId] && game.bloodFeudTargets[combat.defenderMsgId] === combat.attackerPlayerNum) {
     // Already applied during CC play for the first attack; for subsequent attacks the bonus is applied in combat.js pre-roll
   }

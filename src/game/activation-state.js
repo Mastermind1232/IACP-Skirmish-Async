@@ -935,7 +935,11 @@ const ROUND_OBJECT_FLAGS = [
   // pendingVoracious removed 2026-05-07 — Voracious migrated to SoA
   // orchestrator (slice 6); replaced by game.voraciousUsed.
   'massiveMovementLocked',
-  'disarmPermanentWeakened',
+  // disarmPermanentWeakened REMOVED 2026-08-31: Disarm prints no duration and
+  // alexanbv ruled it "permanent for the rest of game". It was being reset both
+  // here (round start) and in clearUntilEndOfRoundFlags (EOR), so the lock never
+  // outlived the round it was applied in. game-state.js already listed it among
+  // the game-persistent maps that are "never cleared by a round boundary".
   'adrenalineBonuses',
   'imperialRetrofittingMultiAttack',
   'urgencyMustSpendAll',

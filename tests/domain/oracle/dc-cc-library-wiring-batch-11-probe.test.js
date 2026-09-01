@@ -25,7 +25,11 @@ const BATCH = [
   ['Protect the Old Ways',   ['protectOldWaysBonus']],
   ['Provoke',                ['provokeNextActivation']],
   ['Rally the Troops',       ['readyAdjacentFriendlyDeploymentCard']],
-  ['Rapid Recalibration',    ['rerollOneAttackDie']],
+  // Rapid Recalibration is a die-TURN, not a reroll (alexanbv 2026-08-31:
+  // "rapid recall is a picker"). The gate path already turned the die; the
+  // library entry backed the hand path and still granted a random reroll, so
+  // the same card behaved differently depending on how it was played.
+  ['Rapid Recalibration',    ['setAttackDieFace']],
   ['Rebel Graffiti',         ['rebelGraffitiVp']],
   ['Regroup',                ['discardHarmfulFromAdjacentFigures']],
   ['Reinforcements',         ['placeDefeatedFigure']],

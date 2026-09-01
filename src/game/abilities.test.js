@@ -2211,9 +2211,9 @@ test('Jundland Terror Special mode arms an IMMEDIATE special picker (NOT freeSpe
   assert.strictEqual(game.jundlandTerrorPlayedThisEor, true);
 });
 
-// ── Transmit the Plans: distribute 2 Hit Tokens among friendly figures ──────
+// ── Transmit the Plans: distribute 2 Damage Tokens among friendly figures ──────
 
-test('Transmit the Plans distributes 2 Hit Tokens among friendly figures', () => {
+test('Transmit the Plans distributes 2 Damage Tokens among friendly figures', () => {
   const msgId = 'msg-ttp';
   const game = {
     gameId: 'g-ttp',
@@ -2330,7 +2330,7 @@ test('Field Supply: token-type choice (Hit vs Surge) and up to 2 figures', () =>
     figurePositions: { 1: { [f1]: 'a2' } },
   };
   const dcMessageMeta = new Map([[msgId, { gameId: 'g-fs', playerNum: 1, dcName: 'Field Tech', displayName: 'Field Tech [Group 1]' }]]);
-  // First call → prompt offering Hit Token + Surge Token per eligible figure.
+  // First call → prompt offering Damage Token + Surge Token per eligible figure.
   const prompt = resolveAbility('Field Supply', { game, playerNum: 1, dcMessageMeta });
   assert.strictEqual(prompt.requiresChoice, true);
   assert.ok(prompt.choiceValues.includes(`${f1}|Damage`));

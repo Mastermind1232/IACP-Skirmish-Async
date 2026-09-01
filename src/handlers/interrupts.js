@@ -842,10 +842,10 @@ export async function handleScavengedWalker(interaction, ctx) {
   if (!_swMeta) { await interaction.followUp({ content: 'DC not found.', ephemeral: true }).catch(discordCatch); return; }
   if (!await requirePlayer(interaction, _swGame, interaction.user.id, _swMeta.playerNum, canActAsPlayer, 'Only the DC owner may respond.')) return;
   if (buttonKey === 'scavenged_walker_attack_') {
-    // Set -1 Hit penalty flag for the next attack from this DC
+    // Set -1 Damage penalty flag for the next attack from this DC
     _swGame.scavengedWalkerAttackPenalty = _swGame.scavengedWalkerAttackPenalty || {};
     _swGame.scavengedWalkerAttackPenalty[_swMsgId] = true;
-    await logGameAction(_swGame, client, `**Scavenged Walker** — **${_swMeta.displayName || _swMeta.dcName}** will perform an interrupt attack with -1 Hit. Use the Attack button.`, { phase: 'ROUND', icon: 'card' });
+    await logGameAction(_swGame, client, `**Scavenged Walker** — **${_swMeta.displayName || _swMeta.dcName}** will perform an interrupt attack with -1 Damage. Use the Attack button.`, { phase: 'ROUND', icon: 'card' });
   } else {
     await logGameAction(_swGame, client, `**Scavenged Walker** — **${_swMeta.displayName || _swMeta.dcName}** skipped end-of-round attack.`, { phase: 'ROUND', icon: 'card' });
   }

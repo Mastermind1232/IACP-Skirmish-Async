@@ -1084,8 +1084,8 @@ function _makeForcedRerollResolver({ slot, side }) {
 }
 
 /**
- * Exhaust-attachment bonus resolver (Scavenged Weaponry +1 Hit, Explosive
- * Armaments Blast 1, Feeding Frenzy +1 Hit) — alexanbv 2026-06-17. No sub-choice:
+ * Exhaust-attachment bonus resolver (Scavenged Weaponry +1 Damage, Explosive
+ * Armaments Blast 1, Feeding Frenzy +1 Damage) — alexanbv 2026-06-17. No sub-choice:
  * clicking the button applies the stat bonus; the gate's _markGateAbilityUsed
  * then exhausts the attachment (params.exhaustOnUse). Replaces the eager
  * declaration handling so the card exhausts ONLY when the player uses it.
@@ -1497,14 +1497,14 @@ export const COMBAT_RESOLVERS = {
     },
   },
   call_the_shots: {
-    prompt: () => ({ content: '**Call the Shots** — apply +2 Accuracy, +1 Hit, or +1 Surge?', buttons: [['acc', '+2 Accuracy'], ['hit', '+1 Hit'], ['surge', '+1 Surge'], ['skip', 'Skip', 'secondary']] }),
+    prompt: () => ({ content: '**Call the Shots** — apply +2 Accuracy, +1 Damage, or +1 Surge?', buttons: [['acc', '+2 Accuracy'], ['hit', '+1 Damage'], ['surge', '+1 Surge'], ['skip', 'Skip', 'secondary']] }),
     apply: (choice, { game, combat, thread }) => {
       // Once-per-round limit is spent ONLY when a bonus is actually applied; Skip
       // must not burn Call the Shots (spec: "you MAY apply ..."). Mirrors get_down.
       const fk = _findModsFigKey('call_the_shots', game, combat);
       const _ctsStamp = () => { if (fk) { game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {}; game.roundFigureAbilityUsed[`${fk}_call_the_shots`] = true; } };
       if (choice === 'acc') { _ctsStamp(); combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 2; thread?.send('**Call the Shots** — Applied +2 Accuracy.').catch(discordCatch); }
-      else if (choice === 'hit') { _ctsStamp(); combat.bonusHits = (combat.bonusHits || 0) + 1; thread?.send('**Call the Shots** — Applied +1 Hit.').catch(discordCatch); }
+      else if (choice === 'hit') { _ctsStamp(); combat.bonusHits = (combat.bonusHits || 0) + 1; thread?.send('**Call the Shots** — Applied +1 Damage.').catch(discordCatch); }
       else if (choice === 'surge') { _ctsStamp(); combat.surgeBonus = (combat.surgeBonus || 0) + 1; thread?.send('**Call the Shots** — Applied +1 Surge.').catch(discordCatch); }
       else thread?.send('**Call the Shots** — Skipped.').catch(discordCatch);
       combat.callTheShotsResolved = true;
@@ -1540,10 +1540,10 @@ export const COMBAT_RESOLVERS = {
     },
   },
   heavy_repeater: {
-    prompt: () => ({ content: '**Heavy Repeater** — suffer 1 Strain for a bonus?', buttons: [['hit', '+1 Hit (1 Strain)'], ['blast', 'Blast 2 (1 Strain)'], ['acc', '+3 Acc (1 Strain)'], ['skip', 'Skip', 'secondary']] }),
+    prompt: () => ({ content: '**Heavy Repeater** — suffer 1 Strain for a bonus?', buttons: [['hit', '+1 Damage (1 Strain)'], ['blast', 'Blast 2 (1 Strain)'], ['acc', '+3 Acc (1 Strain)'], ['skip', 'Skip', 'secondary']] }),
     apply: async (choice, { game, combat, thread, ctx }) => {
       let strain = false;
-      if (choice === 'hit') { combat.bonusHits = (combat.bonusHits || 0) + 1; strain = true; thread?.send('**Heavy Repeater** — +1 Hit (1 Strain).').catch(discordCatch); }
+      if (choice === 'hit') { combat.bonusHits = (combat.bonusHits || 0) + 1; strain = true; thread?.send('**Heavy Repeater** — +1 Damage (1 Strain).').catch(discordCatch); }
       else if (choice === 'blast') { combat.blastDamage = Math.max(combat.blastDamage || 0, 2); strain = true; thread?.send('**Heavy Repeater** — Blast 2 (1 Strain).').catch(discordCatch); }
       else if (choice === 'acc') { combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 3; strain = true; thread?.send('**Heavy Repeater** — +3 Accuracy (1 Strain).').catch(discordCatch); }
       else thread?.send('**Heavy Repeater** — Skipped.').catch(discordCatch);
@@ -1553,7 +1553,7 @@ export const COMBAT_RESOLVERS = {
   },
   // Query (HK-47) — TWO-TIMING: played/chosen at on_declare (the defender
   // decides). "Become Bleeding" resolves IMMEDIATELY (Bleed token now);
-  // "accept +1 Damage" stashes a mods-window pending modifier (+1 Hit) that the
+  // "accept +1 Damage" stashes a mods-window pending modifier (+1 Damage) that the
   // 'pending_modifiers_drain' passive applies when the mods window runs.
   query: {
     prompt: () => ({ content: '🤖 **Query (HK-47)** — become Bleeding (avoid +1 Damage) or accept +1 Damage?', buttons: [['bleed', 'Become Bleeding'], ['accept', 'Accept +1 Damage', 'danger']] }),
@@ -1573,7 +1573,7 @@ export const COMBAT_RESOLVERS = {
   // Negotiate (Hondo) — TWO-TIMING: Hondo's attacker ability played/chosen at
   // on_declare; the DEFENDER decides (mention them). "Pay 2 VP" resolves
   // IMMEDIATELY (defender loses 2 VP now, no further effect). "Accept +2 Damage"
-  // stashes a mods-window pending modifier (+2 Hit) applied when the mods window
+  // stashes a mods-window pending modifier (+2 Damage) applied when the mods window
   // runs (via 'pending_modifiers_drain').
   negotiate: {
     prompt: ({ game, combat }) => {
@@ -1809,7 +1809,7 @@ export const COMBAT_RESOLVERS = {
   // ── FIX-2 spend-resource mods resolvers ──────────────────────────────────
   // Rogue One ([Rogue One] upgrade) — discard 1 Power Token from ANOTHER friendly
   // figure → +1 Damage. Stage 1 lists each ally token (figureKey#index labelled by
-  // token type); spending removes that token; bonus = +1 Hit.
+  // token type); spending removes that token; bonus = +1 Damage.
   rogue_one: _makeSpendResourceResolver({
     name: 'Rogue One',
     options: (game, combat) => getRogueOneDonors(game, combat).map((d) =>
@@ -2821,12 +2821,12 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   // (combat-abilities-attachment-auto.js). alexanbv 2026-06-17.
   if (id === 'driven_by_hatred_hit') {
     combat.bonusHits = (combat.bonusHits || 0) + 1;
-    await thread?.send('**Driven by Hatred** — +1 Hit.').catch(discordCatch);
+    await thread?.send('**Driven by Hatred** — +1 Damage.').catch(discordCatch);
     return;
   }
   if (id === 'wookiee_avenger_hit') {
     combat.bonusHits = (combat.bonusHits || 0) + 1;
-    await thread?.send('**Wookiee Avenger** — +1 Hit while attacking.').catch(discordCatch);
+    await thread?.send('**Wookiee Avenger** — +1 Damage while attacking.').catch(discordCatch);
     return;
   }
   if (id === 'combat_suit_reduce_pierce') {
@@ -2836,7 +2836,7 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
   }
   if (id === 'heir_to_the_jedi_hit') {
     combat.bonusHits = (combat.bonusHits || 0) + 1;
-    await thread?.send('**Heir to the Jedi** — +1 Hit (Ranged attack).').catch(discordCatch);
+    await thread?.send('**Heir to the Jedi** — +1 Damage (Ranged attack).').catch(discordCatch);
     return;
   }
   if (id === 'prey_on_the_weak') {
@@ -2859,7 +2859,7 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     combat.bonusAccuracy = (combat.bonusAccuracy || 0) + 4;
     combat.bonusHits = (combat.bonusHits || 0) + 1;
     combat.pulseCannonResolved = true;
-    await thread.send('**Pulse Cannon** — Power Token spent: **+4 Accuracy, +1 Hit**.').catch(discordCatch);
+    await thread.send('**Pulse Cannon** — Power Token spent: **+4 Accuracy, +1 Damage**.').catch(discordCatch);
   } else if (id === 'fury_kashyyyk_pierce') {
     combat.bonusPierce = (combat.bonusPierce || 0) + 1;
     await thread.send('**Fury of Kashyyyk** — +1 Pierce (elite WOOKIEE, target within 2, friendly WOOKIEE within 2 of the defender).').catch(discordCatch);
@@ -2938,12 +2938,12 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     } else {
       const r = applyScattergunHits(combat, SCATTERGUN_HIT_DELTA);
       combat.bonusHits = r.bonusHits;
-      await thread.send('**Scattergun** — adjacent to target: +1 Hit.').catch(discordCatch);
+      await thread.send('**Scattergun** — adjacent to target: +1 Damage.').catch(discordCatch);
     }
   } else if (id === 'forest_fighters') {
     const r = applyForestFightersHit(combat);
     combat.bonusHits = r.bonusHits;
-    await thread.send('**Forest Fighters** — +1 Hit (Hidden, Melee attack).').catch(discordCatch);
+    await thread.send('**Forest Fighters** — +1 Damage (Hidden, Melee attack).').catch(discordCatch);
   } else if (id === 'exploit_weakness') {
     const r = applyExploitWeaknessSurge(combat);
     combat.surgeBonus = r.surgeBonus;
@@ -3776,7 +3776,7 @@ export async function handleAttackTarget(interaction, ctx) {
     allowedMentions: { users: snowflakeUsers([game.player1Id, game.player2Id]) },
   }));
   if (target.droidArmLOS) await thread.send(`**Droid Arm** — LOS drawn from adjacent space (1 Power Token discarded).`).catch(discordCatch);
-  if (_aimFired) await thread.send(`🎯 **Aim** — You have not exited your space this activation: +1 Hit, +2 Accuracy.`).catch(discordCatch);
+  if (_aimFired) await thread.send(`🎯 **Aim** — You have not exited your space this activation: +1 Damage, +2 Accuracy.`).catch(discordCatch);
   // Per-figure 2026-05-09: next-attack bonuses keyed by attackerFigureKey
   // (multifigure-independent-activation rule).
   const nextSurge = [
@@ -3866,7 +3866,7 @@ export async function handleAttackTarget(interaction, ctx) {
     attackTargetMsgId: interaction.message.id,
     darksaberBlastToCleave: overrideDice?.darksaberBlastToCleave || false,
   };
-  // Aim (Rebel Trooper Elite/Regular): apply +1 Hit +2 Accuracy to pendingCombat.
+  // Aim (Rebel Trooper Elite/Regular): apply +1 Damage +2 Accuracy to pendingCombat.
   if (_aimFired) {
     const _aimed = applyAimBonus({ bonusHits: game.pendingCombat.bonusHits, bonusAccuracy: game.pendingCombat.bonusAccuracy });
     game.pendingCombat.bonusHits = _aimed.bonusHits;
@@ -3963,7 +3963,7 @@ export async function handleAttackTarget(interaction, ctx) {
     defenderDcName: target.isNpc ? '' : targetDcName,
   });
 
-  // Blood Feud: persistent +1 Hit when attacking a DC marked with Blood Feud
+  // Blood Feud: persistent +1 Damage when attacking a DC marked with Blood Feud
   if (game.bloodFeudTargets?.[target.msgId] === attackerPlayerNum) {
     game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + 1;
     game.pendingCombat.bloodFeudApplied = true;
@@ -4019,20 +4019,20 @@ export async function handleAttackTarget(interaction, ctx) {
     // Targeting Computer (attachment) — reroll MOVED to the gate rerolls window
     // (CSV [Targeting Computer] row, attachment-presence). Dead count removed.
 
-    // Driven by Hatred (Darth Vader): +1 Hit. The reroll is offered by the gate
+    // Driven by Hatred (Darth Vader): +1 Damage. The reroll is offered by the gate
     // ([Driven by Hatred] attachment reroll row); the old eager rerollOneAttackDie
     // count is dead (its consumer is in the retired legacy block). Brutality loss
     // is handled separately.
-    // Driven by Hatred (+1 Hit) and Wookiee Avenger (+1 Hit) are now gate mods
+    // Driven by Hatred (+1 Damage) and Wookiee Avenger (+1 Damage) are now gate mods
     // passives (combat-abilities-attachment-auto.js → _fireModsPassive), fired in
     // the modifiers window instead of eagerly here. alexanbv 2026-06-17.
-    // Heir to the Jedi (Luke): +1 Hit on Ranged is now a gate mods passive
+    // Heir to the Jedi (Luke): +1 Damage on Ranged is now a gate mods passive
     // (heir_to_the_jedi_hit). Saber Strike pre-attack Focus is still handled
     // below (a declaration-time die effect, not a modifier). alexanbv 2026-06-17.
     // Rogue Smuggler (Han Solo) — reroll MOVED to the gate rerolls window
     // (CSV [Rogue Smuggler] row). Distracting-loss is handled separately below.
     // Cross Training: defend-only ability (no attack effect)
-    // Guidance Systems (Mortar Trooper): optional -1 Hit, +2 Accuracy per use (multiple times per attack)
+    // Guidance Systems (Mortar Trooper): optional -1 Damage, +2 Accuracy per use (multiple times per attack)
     if (cardNameIncludes(_atkUpgrades, 'Mortar Trooper')) {
       _pc.guidanceSystemsAvailable = true;
     }
@@ -4080,8 +4080,8 @@ export async function handleAttackTarget(interaction, ctx) {
     // Rogue Smuggler (defender): lose Distracting — now a gate defender mods
     // passive (rogue_smuggler_distracting → _fireModsPassive). alexanbv 2026-06-17.
     // --- Exhaust-based attacker attachments ---
-    // Scavenged Weaponry (+1 Hit, on_declare), Explosive Armaments (Blast 1,
-    // mods), Feeding Frenzy (+1 Hit vs a damaged target, mods) are now OFFERED in
+    // Scavenged Weaponry (+1 Damage, on_declare), Explosive Armaments (Blast 1,
+    // mods), Feeding Frenzy (+1 Damage vs a damaged target, mods) are now OFFERED in
     // their gate windows as interactive exhaust-on-use buttons (combat-abilities-
     // exhaust.js) — applied only when the player chooses them, exhausting the
     // card on use. The eager auto-apply here was removed to kill the double
@@ -4112,11 +4112,11 @@ export async function handleAttackTarget(interaction, ctx) {
   // passive (combat-abilities-mods.js 'the_generals_ranks' → _fireModsPassive),
   // fired in the modifiers window. The eager declaration-time detection was
   // deleted to kill the double handling. alexanbv 2026-06-18.
-  // Scavenged Walker: -1 Hit penalty on end-of-round interrupt attack
+  // Scavenged Walker: -1 Damage penalty on end-of-round interrupt attack
   if (game.scavengedWalkerAttackPenalty?.[msgId]) {
     game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) - 1;
     delete game.scavengedWalkerAttackPenalty[msgId];
-    await thread.send('**Scavenged Walker** — -1 Hit applied to this interrupt attack.').catch(discordCatch);
+    await thread.send('**Scavenged Walker** — -1 Damage applied to this interrupt attack.').catch(discordCatch);
   }
   // Driven by Hatred: remove 1 die from attack pool on end-of-round attack.
   // Per destruct 2026-05-06: any ability with multiple legal options must
@@ -4475,7 +4475,7 @@ export async function handleAttackTarget(interaction, ctx) {
   // Scattergun / ACP Scattergun — MOVED to the mods window
   // (combat-abilities-mods.js 'scattergun' passive).
 
-  // Shared Intuition (4-LOM): +1 Hit while attacking if another
+  // Shared Intuition (4-LOM): +1 Damage while attacking if another
   // friendly HUNTER within 3 has LOS to target. Per dc-effects.json
   // 'shared_intuition' is on 4-LOM only (alexanbv correction
   // 2026-05-10 — the legacy comment named Tress Hacnua but only 4-LOM
@@ -4499,7 +4499,7 @@ export async function handleAttackTarget(interaction, ctx) {
         if (!hasLineOfSightByCoord(game, pos, targetCoord, mapSpaces, getFigureSize, { blocking: null })) continue;
         const r = applySharedIntuitionHit(game.pendingCombat);
         game.pendingCombat.bonusHits = r.bonusHits;
-        await thread.send(`**Shared Intuition** — ${fkDcName} (HUNTER) is within 3 spaces with LOS to target: +1 Hit.`);
+        await thread.send(`**Shared Intuition** — ${fkDcName} (HUNTER) is within 3 spaces with LOS to target: +1 Damage.`);
         found = true;
       }
     }
@@ -4854,7 +4854,7 @@ export async function handleAttackTarget(interaction, ctx) {
     const pierceStr = overrideDice.pierce > 0 ? `, Pierce ${overrideDice.pierce}` : '';
     await thread.send(`**Override dice** — Attack uses [${diceStr}]${typeStr}${pierceStr}.`);
   }
-  // Apply bonusHits from overrideDice (e.g. Overheated: -1 Hit, Flurry of Blows: +1 Hit)
+  // Apply bonusHits from overrideDice (e.g. Overheated: -1 Damage, Flurry of Blows: +1 Damage)
   if (overrideDice?.bonusHits) {
     game.pendingCombat.bonusHits = (game.pendingCombat.bonusHits || 0) + overrideDice.bonusHits;
     if (overrideDice.bonusHits < 0) {
@@ -4900,7 +4900,7 @@ export async function handleAttackTarget(interaction, ctx) {
 
   // Illicit Arms (Bib Fortuna): MOVED to proceedAfterRerolls (step-4
   // attacker modifier) per alexanbv 2026-05-09 — was incorrectly firing at
-  // attack-declare. The +1 Hit applies as a step-4 modifier alongside
+  // attack-declare. The +1 Damage applies as a step-4 modifier alongside
   // Pulse Cannon / Negotiate / Call the Shots / Heavy Repeater.
 
   // Per-figure 2026-05-09: clear next-attack bonuses keyed by attackerFigureKey.
@@ -5818,7 +5818,7 @@ export async function handleFlawlessToken(interaction, ctx) {
  * legacy voluntary-reroll decrement path (lines ~4830) and the
  * controlled-reroll sub-picker path (lines ~4700) both need to fire:
  *   - Advanced Targeting Computer (Dark Trooper Mk III): rerolled
- *     atk die has fewer Hits → +1 Hit, limit once per attack.
+ *     atk die has fewer Hits → +1 Damage, limit once per attack.
  *   - Tough Luck eligibility prompt: per CRR + alexanbv 2026-05-13,
  *     EITHER the die's owner OR the player who caused the reroll
  *     may play Tough Luck on the rerolled die.
@@ -5839,7 +5839,7 @@ async function _fireAttackerPostRerollTriggers({ game, combat, thread, ctx, game
           const _atcBonus = applyAdvTcHitBonus(combat);
           combat.bonusHits = _atcBonus.bonusHits;
           combat.advTcBonusApplied = true;
-          if (thread) await thread.send('**Advanced Targeting Computer** — Rerolled die has fewer Hits: +1 Hit applied.').catch(() => {});
+          if (thread) await thread.send('**Advanced Targeting Computer** — Rerolled die has fewer Hits: +1 Damage applied.').catch(() => {});
         }
       }
     } catch { /* non-fatal */ }
@@ -5962,7 +5962,7 @@ const isWithinSpaces = _isWithinSpaces;
  *
  * Attacker bonuses: +N Hit, +N Accuracy, Pierce N, +N Surge, Blast N
  * Defender bonuses: Block N, +N Evade
- * Combined entries (e.g. "+1 Hit, +1 Accuracy, +1 Block") split by comma —
+ * Combined entries (e.g. "+1 Damage, +1 Accuracy, +1 Block") split by comma —
  * each part is applied to whichever role is relevant.
  */
 function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives, dcNames = {}) {
@@ -6181,7 +6181,7 @@ async function sendWildTypeWindow(thread, gameId, role) {
  * return false (caller proceeds with normal applyTokenBonus + token spend).
  *
  * Card text: "When a friendly TROOPER or GUARDIAN within 2 spaces spends a
- * Hit Token or Surge Token while declaring an attack, it MAY suffer 1
+ * Damage Token or Surge Token while declaring an attack, it MAY suffer 1
  * Strain to apply +2 of the chosen symbol instead of +1."
  *
  * Eligibility uses combat.unhingedEligibleSpenders (computed at combat
@@ -6320,7 +6320,7 @@ function buildRogueOneSurgeButton(game, combat) {
   return [
     new ButtonBuilder()
       .setCustomId(`combat_surge_${game.gameId}_rogue_one`)
-      .setLabel('Rogue One: +1 Hit (discard ally token)')
+      .setLabel('Rogue One: +1 Damage (discard ally token)')
       .setStyle(ButtonStyle.Success)
   ];
 }
@@ -6828,7 +6828,7 @@ async function proceedAfterTokens(thread, game, combat, ctx) {
           .setStyle(ButtonStyle.Secondary)
       );
     }
-    // Rogue One: discard a power token from a friendly figure for +1 Hit
+    // Rogue One: discard a power token from a friendly figure for +1 Damage
     surgeRows.push(..._rogueOneBtns);
     surgeRows.push(
       new ButtonBuilder()
@@ -7276,7 +7276,7 @@ export async function handleCombatSurge(interaction, ctx) {
           .setStyle(ButtonStyle.Secondary)
       );
     }
-    // Rogue One: discard a power token from a friendly figure for +1 Hit
+    // Rogue One: discard a power token from a friendly figure for +1 Damage
     surgeRows.push(...buildRogueOneSurgeButton(game, combat));
     surgeRows.push(
       new ButtonBuilder()
@@ -8080,10 +8080,10 @@ export async function handleRogueOneTokenPick(interaction, ctx) {
   const donorDcName = dcNameFromFigureKey(figureKey);
   removeSpentToken(game, figureKey, tokenIndex);
 
-  // Add +1 Hit to the attack
+  // Add +1 Damage to the attack
   combat.bonusHits = (combat.bonusHits || 0) + 1;
   combat.rogueOneHitsGained = (combat.rogueOneHitsGained || 0) + 1;
-  await thread.send(`**Rogue One** — Discarded **${tokenType}** token from **${donorDcName}** → **+1 Hit**.`).catch(discordCatch);
+  await thread.send(`**Rogue One** — Discarded **${tokenType}** token from **${donorDcName}** → **+1 Damage**.`).catch(discordCatch);
 
   // Re-show surge UI
   await _resumeRogueOneSurgeUI(thread, game, combat, gameId, ctx);

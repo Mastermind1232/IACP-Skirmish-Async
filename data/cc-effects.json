@@ -69,14 +69,14 @@
       "cost": 3,
       "playableBy": "HUNTER",
       "timing": "duringAttack",
-      "effect": "Use while attacking a figure. If this is the first Command card you play during this attack, apply +3 Hits to the attack results. You cannot play other Command cards during this attack.",
+      "effect": "Use while attacking a figure. If this is the first Command card you play during this attack, apply +3 Damage to the attack results. You cannot play other Command cards during this attack.",
       "abilityId": "Assassinate"
     },
     "Balancing Force": {
       "cost": 2,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round if your affiliation is Rebel. Each player chooses up to 3 figures. Roll 1 red die. Each of those figures recovers Damage equal to the Hit results.",
+      "effect": "Use at the start of a round if your affiliation is Rebel. Each player chooses up to 3 figures. Roll 1 red die. Each of those figures recovers Damage equal to the Damage results.",
       "abilityId": "Balancing Force",
       "noRestrictionBox": true
     },
@@ -105,7 +105,7 @@
       "cost": 0,
       "playableBy": "BRAWLER",
       "timing": "duringActivation",
-      "effect": "Use during your activation. During your group's activation, apply +1 Hit to the attack results of the next 2 attacks performed by friendly figures.",
+      "effect": "Use during your activation. During your group's activation, apply +1 Damage to the attack results of the next 2 attacks performed by friendly figures.",
       "abilityId": "Beatdown",
       "effectTiming": "duringAttackModifiers"
     },
@@ -155,7 +155,7 @@
       "cost": 2,
       "playableBy": "Jabba the Hutt",
       "timing": "specialAction",
-      "effect": "Special Action: Place this card on a hostile Deployment card. When an attack targeting a figure in that group is declared, apply +1 Hit to the attack results.",
+      "effect": "Special Action: Place this card on a hostile Deployment card. When an attack targeting a figure in that group is declared, apply +1 Damage to the attack results.",
       "abilityId": "Blood Feud",
       "effectTiming": "whenAttackDeclaredOnMarkedGroup"
     },
@@ -234,7 +234,7 @@
       "cost": 1,
       "playableBy": "Captain Terro",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. During this round, you gain +1 Block, and while a friendly TROOPER within 3 spaces is attacking, apply +1 Hit to the attack results.",
+      "effect": "Use at the start of a round. During this round, you gain +1 Block, and while a friendly TROOPER within 3 spaces is attacking, apply +1 Damage to the attack results.",
       "abilityId": "Cavalry Charge",
       "effectTiming": "duringAttackModifiers"
     },
@@ -287,7 +287,7 @@
       "cost": 1,
       "playableBy": "Biv Bodhrik",
       "timing": "duringActivation",
-      "effect": "Use during your activation to move up to 2 spaces. Then, perform a Melee attack without using an action using 1 red and 1 yellow die. This attack uses only the following abilities:\n- Pierce 1\n- Surge: +1 Hit\n- Surge: Stun",
+      "effect": "Use during your activation to move up to 2 spaces. Then, perform a Melee attack without using an action using 1 red and 1 yellow die. This attack uses only the following abilities:\n- Pierce 1\n- Surge: +1 Damage\n- Surge: Stun",
       "abilityId": "Close and Personal"
     },
     "Close the Gap": {
@@ -317,7 +317,7 @@
       "cost": 1,
       "playableBy": "IMPERIAL",
       "timing": "duringActivation",
-      "effect": "Use during your activation. Distribute Hit Tokens equal to the current round number to friendly figures within 3 spaces.",
+      "effect": "Use during your activation. Distribute Damage Tokens equal to the current round number to friendly figures within 3 spaces.",
       "abilityId": "Combat Resupply"
     },
     "Comm Disruption": {
@@ -346,7 +346,7 @@
       "cost": 2,
       "playableBy": "IMPERIAL",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round if your affiliation is IMPERIAL. Each player chooses up to 3 figures. Roll 1 blue die. Each of those figures suffers Damage equal to the Hit results.",
+      "effect": "Use at the start of a round if your affiliation is IMPERIAL. Each player chooses up to 3 figures. Roll 1 blue die. Each of those figures suffers Damage equal to the Damage results.",
       "abilityId": "Corrupting Force",
       "noRestrictionBox": true
     },
@@ -361,7 +361,7 @@
       "cost": 3,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Use at the start of the round. Up to 3 friendly TROOPERS become Hidden. During this round, each of your TROOPERS gains: \n\n- Surge: Stun. If the target was already stunned, apply +2 Hits to the attack results.",
+      "effect": "Use at the start of the round. Up to 3 friendly TROOPERS become Hidden. During this round, each of your TROOPERS gains: \n\n- Surge: Stun. If the target was already stunned, apply +2 Damage to the attack results.",
       "abilityId": "Covering Fire",
       "noRestrictionBox": true
     },
@@ -448,7 +448,7 @@
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "whenYouDeclareAttack",
-      "effect": "Use when you declare a Melee attack to apply +1 Hit to the attack results. If the defender has the Ranged attack type, apply an additional +1 Hit to the attack results.",
+      "effect": "Use when you declare a Melee attack to apply +1 Damage to the attack results. If the defender has the Ranged attack type, apply an additional +1 Damage to the attack results.",
       "abilityId": "Deathblow",
       "effectTiming": "duringAttackModifiers"
     },
@@ -485,14 +485,14 @@
       "cost": 1,
       "playableBy": "Director Krennic",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. Each friendly TROOPER or GUARDIAN within 4 spaces gains 2 movement points or 1 Hit Token.",
+      "effect": "Use at the start of a round. Each friendly TROOPER or GUARDIAN within 4 spaces gains 2 movement points or 1 Damage Token.",
       "abilityId": "Deploy the Garrison!"
     },
     "Desperate Escape": {
       "cost": 1,
       "playableBy": "Kuiil",
       "timing": "endOfRound",
-      "effect": "Use at the end of the round to move up to 6 spaces.\n\nPassive: At the end of the round, if your Kuiil is defeated, you may discard this card from your hand to distribute 2 Hit Tokens among friendly figures.",
+      "effect": "Use at the end of the round to move up to 6 spaces.\n\nPassive: At the end of the round, if your Kuiil is defeated, you may discard this card from your hand to distribute 2 Damage Tokens among friendly figures.",
       "abilityId": "Desperate Escape"
     },
     "Devotion": {
@@ -512,8 +512,8 @@
     "Dioxis Fumes": {
       "cost": 1,
       "playableBy": "DROID or HUNTER",
-      "timing": "duringActivation",
-      "effect": "Use during your activation. Each non-DROID figure suffers 1 Strain. Until the end of the round, non-DROID figures cannot recover Strain.",
+      "timing": "startOfActivation",
+      "effect": "Use at the start of your activation. Each non-DROID figure suffers 1 Strain. Until the end of the round, non-DROID figures cannot recover Strain.",
       "abilityId": "Dioxis Fumes"
     },
     "Disable": {
@@ -724,7 +724,7 @@
       "cost": 1,
       "playableBy": "Ko-Tun Feralo",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round. Up to 2 other figures within 3 spaces of you gain 1 Hit Token or 1 Surge Token. During this round, a friendly figure who spends a Hit Token or a Surge Token may reroll 1 attack die during that attack.",
+      "effect": "Use at the start of a round. Up to 2 other figures within 3 spaces of you gain 1 Damage Token or 1 Surge Token. During this round, a friendly figure who spends a Damage Token or a Surge Token may reroll 1 attack die during that attack.",
       "abilityId": "Field Supply"
     },
     "Field Tactician": {
@@ -865,7 +865,7 @@
       "cost": 1,
       "playableBy": "Bo-Katan Kryze",
       "timing": "afterAttackTargetingYouResolved",
-      "effect": "Use after an attack targeting you resolves. Choose an adjacent hostile figure and roll 1 green die. That figure suffers Damage equal to the Hit results. Then, if you rolled a Surge, gain a Block Token.",
+      "effect": "Use after an attack targeting you resolves. Choose an adjacent hostile figure and roll 1 green die. That figure suffers Damage equal to the Damage results. Then, if you rolled a Surge, gain a Block Token.",
       "abilityId": "Gauntlet Blade"
     },
     "Get Behind Me!": {
@@ -887,7 +887,7 @@
       "cost": 3,
       "playableBy": "TROOPER",
       "timing": "specialAction",
-      "effect": "Special Action: Choose a space within 3 spaces and roll 1 red die. Each figure on or adjacent to the chosen space suffers Damage equal to the Hit results.",
+      "effect": "Special Action: Choose a space within 3 spaces and roll 1 red die. Each figure on or adjacent to the chosen space suffers Damage equal to the Damage results.",
       "abilityId": "Grenadier"
     },
     "Grisly Contest": {
@@ -951,7 +951,7 @@
       "cost": 0,
       "playableBy": "HEAVY WEAPON",
       "timing": "duringAttack",
-      "effect": "Use while attacking to apply +1 Hit to the attack results. If the defender is an object, apply +2 Hit and Pierce 2 to the attack results instead.",
+      "effect": "Use while attacking to apply +1 Damage to the attack results. If the defender is an object, apply +2 Damage and Pierce 2 to the attack results instead.",
       "abilityId": "Heavy Ordnance"
     },
     "Heightened Reflexes": {
@@ -992,7 +992,7 @@
       "cost": 2,
       "playableBy": "Migs Mayfeld",
       "timing": "whenYouDeclareAttack",
-      "effect": "Use when you declare an attack to apply +1 Hit to the attack results for each currently defeated friendly figure, to a maximum of +3 Hits.",
+      "effect": "Use when you declare an attack to apply +1 Damage to the attack results for each currently defeated friendly figure, to a maximum of +3 Damage.",
       "abilityId": "Honoring the Fallen"
     },
     "Hostile Negotiation": {
@@ -1095,14 +1095,14 @@
       "cost": 0,
       "playableBy": "Hondo Ohnaka",
       "timing": "whileDefending",
-      "effect": "Use while defending. Pay your opponent X VPs to apply -X Hits to the attack results. Then, you become Focused.",
+      "effect": "Use while defending. Pay your opponent X VPs to apply -X Damage to the attack results. Then, you become Focused.",
       "abilityId": "Let's Make a Deal"
     },
     "Lightbow": {
       "cost": 1,
       "playableBy": "Chirrut Imwe",
       "timing": "specialAction",
-      "effect": "Special Action: Perform a Ranged attack using 1 blue, 1 red, and 1 green die. This attack uses only the following abilities: \n- +2 Accuracy\n- Surge: +1 Hit\n- Surge: Pierce 4",
+      "effect": "Special Action: Perform a Ranged attack using 1 blue, 1 red, and 1 green die. This attack uses only the following abilities: \n- +2 Accuracy\n- Surge: +1 Damage\n- Surge: Pierce 4",
       "abilityId": "Lightbow"
     },
     "Lock On": {
@@ -1116,7 +1116,7 @@
       "cost": 3,
       "playableBy": "IMPERIAL FORCE USER",
       "timing": "specialAction",
-      "effect": "Special Action: Choose a hostile figure in your line of sight. That figure gains +2 Hit Tokens, then perform an attack with that figure against a target within 4 spaces of the attacker. Then, the chosen figure suffers 2 Strain.",
+      "effect": "Special Action: Choose a hostile figure in your line of sight. That figure gains +2 Damage Tokens, then perform an attack with that figure against a target within 4 spaces of the attacker. Then, the chosen figure suffers 2 Strain.",
       "abilityId": "Lure of the Dark Side"
     },
     "Negation": {
@@ -1138,14 +1138,14 @@
       "cost": 0,
       "playableBy": "TROOPER or GUARDIAN",
       "timing": "specialAction",
-      "effect": "Special Action: Distribute 3 Hit Tokens among figures in your group.",
+      "effect": "Special Action: Distribute 3 Damage Tokens among figures in your group.",
       "abilityId": "Ready Weapons"
     },
     "Size Advantage": {
       "cost": 2,
       "playableBy": "LARGE",
       "timing": "specialAction",
-      "effect": "Special Action: Perform an attack targeting a SMALL figure. Apply +2 Hit to the attack results and the attack gains Weaken.",
+      "effect": "Special Action: Perform an attack targeting a SMALL figure. Apply +2 Damage to the attack results and the attack gains Weaken.",
       "abilityId": "Size Advantage"
     },
     "Smoke Grenade": {
@@ -1195,7 +1195,7 @@
       "cost": 3,
       "playableBy": "HEAVY WEAPON",
       "timing": "doubleActionSpecial",
-      "effect": "Special Action: Perform an attack. Apply +4 Hit to the attack results.",
+      "effect": "Special Action: Perform an attack. Apply +4 Damage to the attack results.",
       "abilityId": "Maximum Firepower"
     },
     "Meditation": {
@@ -1243,7 +1243,7 @@
       "cost": 1,
       "playableBy": "Any Figure",
       "timing": "startOfRound",
-      "effect": "Use at the start of a round to choose up to 2 figures. Each of those figures discards each of its conditions, then gains 1 Hit Token for each condition discarded this way.",
+      "effect": "Use at the start of a round to choose up to 2 figures. Each of those figures discards each of its conditions, then gains 1 Damage Token for each condition discarded this way.",
       "noRestrictionBox": true
     },
     "Inspiring Speech": {
@@ -1264,7 +1264,7 @@
       "cost": 0,
       "playableBy": "BRAWLER",
       "timing": "duringActivation",
-      "effect": "Use during your activation to gain 1 Hit Token. Then, either move up to 1 space or push an adjacent SMALL figure up to 1 space.",
+      "effect": "Use during your activation to gain 1 Damage Token. Then, either move up to 1 space or push an adjacent SMALL figure up to 1 space.",
       "abilityId": "Looking for a Fight"
     },
     "Lord of the Sith": {
@@ -1284,7 +1284,7 @@
       "cost": 0,
       "playableBy": "CREATURE",
       "timing": "duringActivation",
-      "effect": "Use during your activation to gain 1 Power Token. Then, a figure in your group in an exterior space gains 1 Hit Token.",
+      "effect": "Use during your activation to gain 1 Power Token. Then, a figure in your group in an exterior space gains 1 Damage Token.",
       "abilityId": "Marked Territory"
     },
     "Master Operative": {
@@ -1395,7 +1395,7 @@
       "cost": 1,
       "playableBy": "Paz Vizsla",
       "timing": "specialAction",
-      "effect": "Special Action: Strain 4. If you have the Ranged attack type, perform 2 attacks. Apply -1 Hit to the attack results during these attacks. Then, your attack type becomes Melee."
+      "effect": "Special Action: Strain 4. If you have the Ranged attack type, perform 2 attacks. Apply -1 Damage to the attack results during these attacks. Then, your attack type becomes Melee."
     },
     "Overrun": {
       "cost": 2,
@@ -1470,14 +1470,14 @@
       "cost": 0,
       "playableBy": "Any Figure",
       "timing": "duringAttack",
-      "effect": "Use while attacking to apply +1 Hit to the attack results.",
+      "effect": "Use while attacking to apply +1 Damage to the attack results.",
       "abilityId": "Positioning Advantage"
     },
     "Prepared for Battle": {
       "cost": 2,
       "playableBy": "Any Figure",
       "timing": "duringActivation",
-      "effect": "Use during your activation to gain 1 Hit Token and 1 Block Token. Then, if you are a LEADER, an adjacent friendly figure gains 1 Hit Token and 1 Block Token.",
+      "effect": "Use during your activation to gain 1 Damage Token and 1 Block Token. Then, if you are a LEADER, an adjacent friendly figure gains 1 Damage Token and 1 Block Token.",
       "abilityId": "Prepared for Battle"
     },
     "Preservation Protocol": {
@@ -1504,7 +1504,7 @@
       "cost": 1,
       "playableBy": "HUNTER",
       "timing": "whenYouDeclareAttackTargetingHostileWithHighestFigureCost",
-      "effect": "Use when you declare an attack targeting a hostile figure with the highest figure cost of all hostile figures on the map. You become Focused and apply +1 Hit to the attack results.",
+      "effect": "Use when you declare an attack targeting a hostile figure with the highest figure cost of all hostile figures on the map. You become Focused and apply +1 Damage to the attack results.",
       "abilityId": "Primary Target"
     },
     "Protect the Old Ways": {
@@ -1624,7 +1624,7 @@
       "cost": 1,
       "playableBy": "GUARDIAN",
       "timing": "whenOneOfYourFiguresDefeated",
-      "effect": "Use when a friendly figure is defeated to either become Focused, gain 2 Hit Tokens, or move up to 2 spaces.",
+      "effect": "Use when a friendly figure is defeated to either become Focused, gain 2 Damage Tokens, or move up to 2 spaces.",
       "abilityId": "Retaliation"
     },
     "Reverse Engineer": {
@@ -1705,7 +1705,7 @@
       "cost": 2,
       "playableBy": "TECHNICIAN",
       "timing": "specialAction",
-      "effect": "Special Action: Choose a space within 3 spaces and roll a blue die. Open any unlocked doors adjacent to that space. Then, each figure or object on or adjacent to that space suffers Damage equal to the combined Hit and Surge results."
+      "effect": "Special Action: Choose a space within 3 spaces and roll a blue die. Open any unlocked doors adjacent to that space. Then, each figure or object on or adjacent to that space suffers Damage equal to the combined Damage and Surge results."
     },
     "Shadow Ops": {
       "cost": 3,
@@ -1875,7 +1875,7 @@
       "cost": 3,
       "playableBy": "Gideon Argus",
       "timing": "specialAction",
-      "effect": "Special Action: Choose an adjacent friendly figure. That figure performs an attack. Apply +2 Hits to the attack results.",
+      "effect": "Special Action: Choose an adjacent friendly figure. That figure performs an attack. Apply +2 Damage to the attack results.",
       "abilityId": "Take it Down"
     },
     "Take Position": {
@@ -1896,7 +1896,7 @@
       "cost": 1,
       "playableBy": "FORCE USER",
       "timing": "specialAction",
-      "effect": "Special Action: Choose a hostile figure in your line of sight within 3 spaces. Roll 2 blue dice. That figure suffers Damage equal to the Hit results.",
+      "effect": "Special Action: Choose a hostile figure in your line of sight within 3 spaces. Roll 2 blue dice. That figure suffers Damage equal to the Damage results.",
       "abilityId": "Telekinetic Throw"
     },
     "Terminal Network": {
@@ -1962,7 +1962,7 @@
       "cost": 0,
       "playableBy": "Bodhi Rook",
       "timing": "specialAction",
-      "effect": "Special Action: Distribute 2 Hit Tokens among friendly figures. If you are adjacent to a terminal, gain 2 VPs."
+      "effect": "Special Action: Distribute 2 Damage Tokens among friendly figures. If you are adjacent to a terminal, gain 2 VPs."
     },
     "Triangulate": {
       "cost": 1,
@@ -1995,14 +1995,14 @@
       "cost": 1,
       "playableBy": "Any Unique Figure",
       "timing": "duringActivation",
-      "effect": "Use during your activation to gain 1 Hit Token or Surge Token. Then, gain 1 Block Token or Evade Token.",
+      "effect": "Use during your activation to gain 1 Damage Token or Surge Token. Then, gain 1 Block Token or Evade Token.",
       "abilityId": "Veteran Instincts"
     },
     "Whistling Birds": {
       "cost": 2,
       "playableBy": "The Mandalorian",
       "timing": "specialAction",
-      "effect": "Special Action: Move up to 2 spaces, then choose up to 3 figures within 2 spaces and roll 1 red die. Each of those figures suffers Damage equal to the Hit results.",
+      "effect": "Special Action: Move up to 2 spaces, then choose up to 3 figures within 2 spaces and roll 1 red die. Each of those figures suffers Damage equal to the Damage results.",
       "abilityId": "Whistling Birds"
     },
     "Wild Attack": {

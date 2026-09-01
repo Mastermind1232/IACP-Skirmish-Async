@@ -180,8 +180,11 @@ export async function runStatusPhaseAfterEndOfRound(game, ctx) {
  *     that cannot be read during EOR scoring, so re-bucketing has no effect.
  */
 export function clearUntilEndOfRoundFlags(game) {
-  // Disarm permanent Weakened lock — Disarm card leaves play at end of round.
-  game.disarmPermanentWeakened = {};
+  // Disarm is NOT cleared here. The card prints no duration, and alexanbv
+  // 2026-08-31 ruled "Disarm is permanent for the rest of game". The lock
+  // used to be reset every round on the assumption that the card left play
+  // at end of round, which the card does not say. game.disarmPermanentWeakened
+  // now lives for the whole game, as its name always claimed.
   // In the Shadows (CC) — "until the end of the round" LOS effect.
   game.roundInTheShadows = null;
   // I Must Go Alone (CC) — "Until the end of the round, hostile figures cannot

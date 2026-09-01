@@ -2575,7 +2575,7 @@ describe('Field Supply — condition traces', () => {
     assert.ok(!cond(G, { attackerDcName: 'Field Supply', attackerPlayerNum: 1 }), 'owner self-pred must not fire');
   });
   it('Field Supply p2: conditional guard — smoke only (no crash)', () => {
-    const row = { card: 'Field Supply', ability: 'Field Supply', part: '2', affects_self: 'TRUE', affects_others: 'a friendly figure who spends a Hit Token or Surge Token', attack_side: 'attacker', conditional: '', limit: '' };
+    const row = { card: 'Field Supply', ability: 'Field Supply', part: '2', affects_self: 'TRUE', affects_others: 'a friendly figure who spends a Damage Token or Surge Token', attack_side: 'attacker', conditional: '', limit: '' };
     assert.doesNotThrow(() => conditionForRow(row)(G, {}));
   });
 });

@@ -7,6 +7,7 @@ import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords
 import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
 import { figureKeyForActivation, grantActionToFigure } from './activation-state.js';
 import { grantPowerTokens, consumeMovementPoints, figureMpRemaining, grantMovementBank } from './game-helpers.js';
+import { faceOptionsFor, formatFaceLabel, applyFaceToDie, totalsFor, formatTotals } from './die-face-picker.js';
 import { reduceHp, healHp, applyDamageWithDefeatCheck } from './damage-helpers.js';
 import { applyDamageSync, isImmuneToDirectDefeat } from './damage-pipeline.js';
 import { setPendingFalseOrders, setPendingCoordinatedRaid, setPendingExecutiveOrder, setPendingYHSIW, setPendingLure, setPendingEmperorInterrupt, setPendingBombardmentSorin, setPendingBattlefieldLeadership } from './interrupts.js';
@@ -2547,7 +2548,7 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // Multi-Fire (HK Assassin Droid): 2 attacks, different targets, -1 Hit each
+  // Multi-Fire (HK Assassin Droid): 2 attacks, different targets, -1 Damage each
   if (entry.type === 'dcSpecial' && entry.multiFireDoubleAttack) {
     const { game, msgId, meta } = context;
     if (game && msgId) {
@@ -2561,7 +2562,7 @@ export function resolveAbility(abilityId, context) {
       // Grant a free attack for the second shot
       game.freeAttackBonusPending = game.freeAttackBonusPending || {};
       game.freeAttackBonusPending[_mfFigureKey] = { from: 'Multi-Fire' };
-      // Apply -1 Hit to all attacks during Multi-Fire.
+      // Apply -1 Damage to all attacks during Multi-Fire.
       // Per alexanbv 2026-05-13: keyed by activator figureKey.
       game.pendingOverrideAttackDice = game.pendingOverrideAttackDice || {};
       game.pendingOverrideAttackDice[_mfFigureKey] = { bonusHits: -1 };
@@ -5745,7 +5746,7 @@ export function resolveAbility(abilityId, context) {
         state.distributed.push(chosenFigureKey);
         state.remaining -= 1;
         if (state.remaining > 0) {
-          // More Hit Tokens to assign — re-prompt for the next recipient.
+          // More Damage Tokens to assign — re-prompt for the next recipient.
           const _nextKeys = [];
           const _nextLabels = [];
           for (const [fk, pos] of Object.entries(game.figurePositions?.[playerNum] || {})) {
@@ -5757,16 +5758,16 @@ export function resolveAbility(abilityId, context) {
           return {
             applied: false,
             requiresChoice: true,
-            choiceOptions: _nextLabels.map(n => `Hit Token recipient: ${n}`),
+            choiceOptions: _nextLabels.map(n => `Damage Token recipient: ${n}`),
             choiceValues: _nextKeys,
             refreshDcEmbed: true,
-            logMessage: `**${_deCardName}** — granted 1 Hit Token to **${dcNameFromFigureKey(chosenFigureKey)}**. ${state.remaining} remaining.`,
+            logMessage: `**${_deCardName}** — granted 1 Damage Token to **${dcNameFromFigureKey(chosenFigureKey)}**. ${state.remaining} remaining.`,
           };
         }
         delete game.pendingKuilTokenSplitState;
         return {
           applied: true,
-          logMessage: `**${_deCardName}** — granted 1 Hit Token to **${dcNameFromFigureKey(chosenFigureKey)}**. Distribution complete.`,
+          logMessage: `**${_deCardName}** — granted 1 Damage Token to **${dcNameFromFigureKey(chosenFigureKey)}**. Distribution complete.`,
           refreshDcEmbed: true,
         };
       }
@@ -5779,16 +5780,16 @@ export function resolveAbility(abilityId, context) {
         friendlyLabels.push(dcNameFromFigureKey(fk));
       }
       if (friendlyKeys.length === 0) {
-        return { applied: false, manualMessage: `**${_deCardName}** — no friendly figures in play to distribute Hit Tokens to.` };
+        return { applied: false, manualMessage: `**${_deCardName}** — no friendly figures in play to distribute Damage Tokens to.` };
       }
       const state = game.pendingKuilTokenSplitState || { remaining: tokensTotal, distributed: [] };
       game.pendingKuilTokenSplitState = state;
       return {
         applied: false,
         requiresChoice: true,
-        choiceOptions: friendlyLabels.map(n => `Hit Token recipient: ${n}`),
+        choiceOptions: friendlyLabels.map(n => `Damage Token recipient: ${n}`),
         choiceValues: friendlyKeys,
-        manualMessage: `**${_deCardName}** — Kuiil is defeated. Discard to distribute ${state.remaining} Hit Token${state.remaining === 1 ? '' : 's'} among friendly figures (1 per click).`,
+        manualMessage: `**${_deCardName}** — Kuiil is defeated. Discard to distribute ${state.remaining} Damage Token${state.remaining === 1 ? '' : 's'} among friendly figures (1 per click).`,
       };
     }
   }
@@ -6137,16 +6138,16 @@ export function resolveAbility(abilityId, context) {
     };
   }
 
-  // ccEffect: hitTokenGain (Retaliation) — gain N Hit Tokens. Per the codebase
-  // convention, IACP "Hit Tokens" are NOT a player-choosable type; they map
+  // ccEffect: hitTokenGain (Retaliation) — gain N Damage Tokens. Per the codebase
+  // convention, IACP "Damage Tokens" are NOT a player-choosable type; they map
   // specifically to type-locked 'Damage' power tokens (each adds exactly 1 Hit
   // to the next attack). Mirrors grantPowerTokens(game, fk, 'Damage', n) used
   // by Prepared for Battle / Lure of the Dark Side. No type prompt.
   if (entry.type === 'ccEffect' && typeof entry.hitTokenGain === 'number' && entry.hitTokenGain > 0) {
     const { game, playerNum, dcMessageMeta } = context;
-    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: gain Hit Token(s).' };
+    if (!game || !playerNum || !dcMessageMeta) return { applied: false, manualMessage: 'Resolve manually: gain Damage Token(s).' };
     const msgId = context.msgId ?? findActiveActivationMsgId(game, playerNum, dcMessageMeta);
-    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no figure context for Hit Tokens.' };
+    if (!msgId) return { applied: false, manualMessage: 'Resolve manually: no figure context for Damage Tokens.' };
     const meta = dcMessageMeta.get(msgId);
     if (!meta?.dcName) return { applied: false, manualMessage: entry.label || 'Resolve manually (see rules).' };
     const figureKeys = getFigureKeysForDcMsg(game, playerNum, meta);
@@ -6157,7 +6158,7 @@ export function resolveAbility(abilityId, context) {
         requiresChoice: true,
         choiceOptions: figureChoiceLabels(figureKeys),
         targetFigureKeys: figureKeys,
-        logMessage: `Choose which figure gains ${entry.hitTokenGain} Hit Token(s):`,
+        logMessage: `Choose which figure gains ${entry.hitTokenGain} Damage Token(s):`,
       };
     }
     const fk = context.chosenFigureKey || figureKeys[0];
@@ -6165,13 +6166,13 @@ export function resolveAbility(abilityId, context) {
     const toAdd = Math.min(entry.hitTokenGain, getMaxPowerTokens(fk) - current);
     if (toAdd <= 0) return { applied: false, manualMessage: `That figure already has ${getMaxPowerTokens(fk)} Power Tokens (max).` };
     grantPowerTokens(game, fk, 'Damage', toAdd);
-    return { applied: true, refreshBoard: true, logMessage: `**${entry.label || 'Hit Tokens'}** — gained ${toAdd} Hit Token${toAdd === 1 ? '' : 's'} (Damage).` };
+    return { applied: true, refreshBoard: true, logMessage: `**${entry.label || 'Damage Tokens'}** — gained ${toAdd} Damage Token${toAdd === 1 ? '' : 's'} (Damage).` };
   }
 
   // ccEffect: Power Token gain (Battle Scars, etc.) — requires active activation
   // Skip if a more specific handler owns the ability (lookingForAFightChoice, apexPredator, etc.)
   // ccEffect: constrainedAttackDefenseTokenPair (Veteran Instincts) — "gain 1
-  // Hit Token OR Surge Token, then gain 1 Block Token OR Evade Token." alexanbv
+  // Damage Token OR Surge Token, then gain 1 Block Token OR Evade Token." alexanbv
   // 2026-06-22: TWO CONSTRAINED picks — the first token must be an ATTACK token
   // (Damage/Surge) and the second a DEFENSE token (Block/Evade) — NOT two
   // free-choice tokens (which the old generic powerTokenGain:2 allowed). Offer
@@ -6325,7 +6326,7 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: preparedForBattle (Prepared for Battle) — the activating figure
-  // gains 1 Hit Token (Damage) + 1 Block Token. IF that figure is a LEADER, an
+  // gains 1 Damage Token (Damage) + 1 Block Token. IF that figure is a LEADER, an
   // adjacent friendly figure also gains 1 Hit + 1 Block. (alexanbv audit Jun
   // 2026: the old powerTokenGain:2 + conditionalAdjacentLeaderPowerToken impl
   // had both the gate and recipient inverted.) Self is granted exactly once —
@@ -8080,7 +8081,7 @@ export function resolveAbility(abilityId, context) {
       game.nextAttacksBonusHits = game.nextAttacksBonusHits || {};
       // requiresSmallTarget (Size Advantage, CSV row 720 conditional "target is a
       // Small figure"): carry the gate onto the pending entry so consumption in
-      // combat-bridge.js only applies the +2 Hit / Weaken vs a SMALL target.
+      // combat-bridge.js only applies the +2 Damage / Weaken vs a SMALL target.
       game.nextAttacksBonusHits[_nbFk] = { count: nb.count, bonus: nb.bonus, ...(nb.requiresSmallTarget ? { requiresSmallTarget: true } : {}) };
       if (nbc && typeof nbc.count === 'number' && nbc.count > 0 && Array.isArray(nbc.conditions) && nbc.conditions.length > 0) {
         game.nextAttacksBonusConditions = game.nextAttacksBonusConditions || {};
@@ -8111,8 +8112,8 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: attackBonusHits + requiresMeleeAttack / bonusHitVsRangedDefender (Deathblow)
-  // CSV: "when you declare a MELEE attack — Apply +1 Hit" plus a second row
-  // "Apply an additional +1 Hit if defender has the Ranged attack type".
+  // CSV: "when you declare a MELEE attack — Apply +1 Damage" plus a second row
+  // "Apply an additional +1 Damage if defender has the Ranged attack type".
   // Gate: attacker must be making a Melee attack (combat.isRanged falsy, with
   // a fallback to the attacker's DC attack type). Defender-Ranged check reads
   // the target figure's DC attack.type === 'range'.
@@ -8160,7 +8161,7 @@ export function resolveAbility(abilityId, context) {
     if (entry.mutualExcludeAttackCc && (cbt.attackCcCount || 0) > 1) {
       return { applied: false, manualMessage: 'Assassinate must be the first Command card played this attack. Another CC was already played.' };
     }
-    // Heavy Ordnance: "if the defender is an object apply +2 Hit and Pierce 2
+    // Heavy Ordnance: "if the defender is an object apply +2 Damage and Pierce 2
     // instead". The only attackable object modelled in the combat pipeline is a
     // crate (target.npcType === 'crate', see handlers/combat.js ~3783), so use
     // that as the object-defender signal.
@@ -8861,7 +8862,7 @@ export function resolveAbility(abilityId, context) {
       parts.push(`-${deflectAccPenalty} Accuracy vs Ranged`);
     }
     // Cavalry Charge: friendly TROOPER within 3 spaces of the playing figure gets
-    // +N Hit when attacking (CSV "Apply +1 Hit ... of a friendly TROOPER within 3").
+    // +N Hit when attacking (CSV "Apply +1 Damage ... of a friendly TROOPER within 3").
     if (entry.trooperRoundAttackHitBonus) {
       registerRoundModifier(game, {
         id: `${cardName}:${playerNum}:atk-trooper-hit`,
@@ -9284,7 +9285,7 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: lureOfTheDarkSide (Lure of the Dark Side) — G25-G28, C3
-  // Choose hostile figure in LOS, give +2 Hit tokens, perform attack with that figure, then 2 Strain.
+  // Choose hostile figure in LOS, give +2 Damage tokens, perform attack with that figure, then 2 Strain.
   // Phase 1: find hostiles in LOS from activating figure, return picker
   // Phase 2: chosen hostile → set up pendingLure for combat delegation (like False Orders)
   if (entry.type === 'ccEffect' && entry.lureOfTheDarkSide) {
@@ -9306,8 +9307,8 @@ export function resolveAbility(abilityId, context) {
       // Grant +2 Damage power tokens to the hostile figure. Per IACP
       // power-token system, only 'Block' / 'Evade' / 'Damage' / 'Surge'
       // exist as token types — there is no separate 'Hit' token. The
-      // card text says "Hit Tokens" but that maps to 'Damage' tokens
-      // in the codebase (each grants +1 Hit when spent during attack).
+      // card text says "Damage Tokens" but that maps to 'Damage' tokens
+      // in the codebase (each grants +1 Damage when spent during attack).
       grantPowerTokens(game, chosenFigureKey, 'Damage', 2);
       // Set up Lure attack (analogous to False Orders)
       setPendingLure(game, {
@@ -9320,7 +9321,7 @@ export function resolveAbility(abilityId, context) {
       return {
         applied: true,
         lureActionPick: true,
-        logMessage: `**Lure of the Dark Side** — **${dcNameFromFigureKey(chosenFigureKey)}** gains 2 Hit Tokens (Damage). ${dcNameFromFigureKey(activatingFk || '')} will perform an attack with that figure.`,
+        logMessage: `**Lure of the Dark Side** — **${dcNameFromFigureKey(chosenFigureKey)}** gains 2 Damage Tokens (Damage). ${dcNameFromFigureKey(activatingFk || '')} will perform an attack with that figure.`,
       };
     }
 
@@ -9358,7 +9359,7 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: Blood Feud — Special Action: PLACE this card on a hostile
   // Deployment card the PLAYER chooses (no current attack / defender — alexanbv
-  // 2026-06-22). When an attack later targets a figure in that group, +1 Hit is
+  // 2026-06-22). When an attack later targets a figure in that group, +1 Damage is
   // applied (consumed in combat-bridge.js / combat.js via game.bloodFeudTargets).
   if (entry.type === 'ccEffect' && entry.bloodFeudEffect) {
     const { game, playerNum, dcMessageMeta, chosenFigureKey } = context;
@@ -10949,6 +10950,68 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: 'During this attack, Pierce has no effect.' };
   }
 
+  // ccEffect: setAttackDieFace (Rapid Recalibration) — "Choose 1 attack die and
+  // turn that die to any side."
+  //
+  // This is a PICKER, not a reroll. It used to resolve as rerollOneAttackDie,
+  // the shared random-reroll counter that Mitigate / Officer's Training /
+  // Sniper / Bespin Security / Much to Learn / Professional all feed, so the
+  // card came out strictly weaker than printed — a reroll is random, turning a
+  // die is chosen. alexanbv 2026-08-31: "rapid recall is a picker".
+  //
+  // Two phases via the standard requiresChoice re-entry:
+  //   Phase 1 (no pending state) — list the rolled attack dice.
+  //   Phase 2 (pending state set) — list that die's real faces and apply one.
+  // Faces come from data/dice.json through the shared helpers, so only faces
+  // the die actually has are offered.
+  if (entry.type === 'ccEffect' && entry.setAttackDieFace) {
+    const { game, combat, choiceIndex } = context;
+    const cbt = combat || game?.combat || game?.pendingCombat;
+    if (!cbt) return { applied: false, manualMessage: 'Resolve manually: play while attacking.' };
+    const dice = cbt.attackDiceResults || [];
+    if (!dice.length) return { applied: false, manualMessage: 'Resolve manually: the attack dice have not been rolled yet.' };
+
+    const pending = cbt._pendingSetDieFace;
+
+    // Phase 2 — a die was already chosen; this choice is the face.
+    if (pending && typeof pending.dieIdx === 'number' && choiceIndex !== undefined && choiceIndex !== null) {
+      const die = dice[pending.dieIdx];
+      if (!die) { delete cbt._pendingSetDieFace; return { applied: false, manualMessage: 'Resolve manually: that die is no longer in the pool.' }; }
+      const faces = faceOptionsFor('attack', die.color);
+      const face = faces[choiceIndex];
+      if (!face) { delete cbt._pendingSetDieFace; return { applied: false, manualMessage: 'Resolve manually: unknown die face.' }; }
+      const before = formatFaceLabel('attack', die);
+      dice[pending.dieIdx] = applyFaceToDie('attack', die, face);
+      cbt.attackDiceResults = dice;
+      const totals = totalsFor('attack', dice);
+      cbt.attackRoll = { ...(cbt.attackRoll || {}), ...totals };
+      delete cbt._pendingSetDieFace;
+      return {
+        applied: true,
+        logMessage: `**Rapid Recalibration** — Die #${pending.dieIdx + 1} (${die.color}) turned from ${before} to ${formatFaceLabel('attack', face)}. New attack results: ${formatTotals('attack', totals)}.`,
+      };
+    }
+
+    // Phase 1 — pick which die.
+    if (choiceIndex !== undefined && choiceIndex !== null) {
+      const die = dice[choiceIndex];
+      if (!die) return { applied: false, manualMessage: 'Resolve manually: unknown die.' };
+      const faces = faceOptionsFor('attack', die.color);
+      if (!faces.length) return { applied: false, manualMessage: `Resolve manually: no face data for a ${die.color} attack die.` };
+      cbt._pendingSetDieFace = { dieIdx: choiceIndex, source: 'Rapid Recalibration' };
+      return {
+        requiresChoice: true,
+        choiceOptions: faces.map((f) => formatFaceLabel('attack', f)),
+        logMessage: `**Rapid Recalibration** — Turn die #${choiceIndex + 1} (${die.color}) to which side?`,
+      };
+    }
+
+    return {
+      requiresChoice: true,
+      choiceOptions: dice.map((d, i) => `Die #${i + 1} (${d.color}): ${formatFaceLabel('attack', d)}`),
+    };
+  }
+
   // ccEffect: rerollOneAttackDie (Mitigate)
   if (entry.type === 'ccEffect' && entry.rerollOneAttackDie) {
     const { game, combat } = context;
@@ -12010,7 +12073,7 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: deployGarrisonEffect (Deploy the Garrison!) — at start of
   // a round, each friendly TROOPER or GUARDIAN within 4 spaces makes a
-  // PER-FIGURE choice between gaining 1 Hit Token or moving up to 2
+  // PER-FIGURE choice between gaining 1 Damage Token or moving up to 2
   // spaces. Order is player-chosen; each figure resolves before the
   // next one is offered. No activation is in progress (start-of-round
   // timing) so all MP grants use the picker (rule 1, no bank,
@@ -12074,7 +12137,7 @@ export function resolveAbility(abilityId, context) {
           applied: false,
           requiresChoice: true,
           choiceOptions: [
-            `${dcN}: gain 1 Hit Token`,
+            `${dcN}: gain 1 Damage Token`,
             `${dcN}: move up to 2 spaces (no bank)`,
           ],
           choiceValues: [`${chosenFigureKey}|token`, `${chosenFigureKey}|move`],
@@ -12149,12 +12212,12 @@ export function resolveAbility(abilityId, context) {
       requiresChoice: true,
       choiceOptions: remaining.map(f => `Resolve next: ${f.dcName}`),
       choiceValues: remaining.map(f => f.figureKey),
-      manualMessage: `**Deploy the Garrison!** — Resolve each TROOPER/GUARDIAN within 4 spaces in order; each chooses 1 Hit Token or 2-space move.`,
+      manualMessage: `**Deploy the Garrison!** — Resolve each TROOPER/GUARDIAN within 4 spaces in order; each chooses 1 Damage Token or 2-space move.`,
     };
   }
 
   // ccEffect: grantHitTokensToActivating (Transmit the Plans) — CSV row 859:
-  // "distribute 2 Hit Tokens AMONG friendly figures". Sequential picker (mirrors
+  // "distribute 2 Damage Tokens AMONG friendly figures". Sequential picker (mirrors
   // Combat Resupply): the player assigns one Hit token at a time to any friendly
   // figure. The vpNoteIfAdjacentTerminal reminder rides along on the first call.
   if (entry.type === 'ccEffect' && typeof entry.grantHitTokensToActivating === 'number') {
@@ -12199,25 +12262,25 @@ export function resolveAbility(abilityId, context) {
       const stillEligible = eligibleAll();
       if (pending.remaining <= 0 || stillEligible.length === 0) {
         delete game.pendingTransmitPlans[msgId];
-        return { applied: true, logMessage: `**${entry.label}** — **${tName}** gained 1 Hit Token. Distribution complete.${vpNote}`, refreshDcEmbed: true };
+        return { applied: true, logMessage: `**${entry.label}** — **${tName}** gained 1 Damage Token. Distribution complete.${vpNote}`, refreshDcEmbed: true };
       }
       return {
         applied: false,
         requiresChoice: true,
         choiceOptions: figureChoiceLabels(stillEligible),
         targetFigureKeys: stillEligible,
-        logMessage: `**${tName}** gained 1 Hit Token. ${pending.remaining} more to assign.`,
+        logMessage: `**${tName}** gained 1 Damage Token. ${pending.remaining} more to assign.`,
       };
     }
 
     // Phase 1: start the distribution.
     const eligible = eligibleAll();
     if (eligible.length === 0) {
-      return { applied: true, logMessage: `**${entry.label}** — No friendly figures eligible for Hit Tokens.${vpNote}` };
+      return { applied: true, logMessage: `**${entry.label}** — No friendly figures eligible for Damage Tokens.${vpNote}` };
     }
     if (eligible.length === 1) {
       grantPowerTokens(game, eligible[0], 'Damage', count);
-      return { applied: true, logMessage: `**${entry.label}** — Granted **${count} Hit Token${count !== 1 ? 's' : ''}** to ${dcNameFromFigureKey(eligible[0])}.${vpNote}`, refreshDcEmbed: true };
+      return { applied: true, logMessage: `**${entry.label}** — Granted **${count} Damage Token${count !== 1 ? 's' : ''}** to ${dcNameFromFigureKey(eligible[0])}.${vpNote}`, refreshDcEmbed: true };
     }
     game.pendingTransmitPlans = game.pendingTransmitPlans || {};
     game.pendingTransmitPlans[msgId] = { remaining: count };
@@ -12226,7 +12289,7 @@ export function resolveAbility(abilityId, context) {
       requiresChoice: true,
       choiceOptions: figureChoiceLabels(eligible),
       targetFigureKeys: eligible,
-      logMessage: `**${entry.label}** — Distribute ${count} Hit Token${count !== 1 ? 's' : ''} among friendly figures. Pick a figure:${vpNote}`,
+      logMessage: `**${entry.label}** — Distribute ${count} Damage Token${count !== 1 ? 's' : ''} among friendly figures. Pick a figure:${vpNote}`,
     };
   }
 
@@ -13142,8 +13205,8 @@ export function resolveAbility(abilityId, context) {
   }
 
   // ccEffect: fieldSupplyEffect (Field Supply) — CSV row 653: "Up to 2 other
-  // figures within 3 spaces gain 1 Hit Token OR 1 Surge Token". The engine stores
-  // a Hit Token as a 'Damage' power token (per the Hemlock/CRR mapping). This is an
+  // figures within 3 spaces gain 1 Damage Token OR 1 Surge Token". The engine stores
+  // a Damage Token as a 'Damage' power token (per the Hemlock/CRR mapping). This is an
   // up-to-2 pick loop (mirrors Karabast!): each pick chooses BOTH a figure and a
   // token type (Hit vs Surge), encoded in the choice value as `<figureKey>|<type>`.
   // (The attack:rerolls token-spend reroll window, CSV row 654, is a separate deep
@@ -13190,7 +13253,7 @@ export function resolveAbility(abilityId, context) {
       const opts = []; const vals = [];
       for (const fk of elig) {
         const n = dcNameFromFigureKey(fk);
-        opts.push(`Hit Token → ${n}`); vals.push(`${fk}|Damage`);
+        opts.push(`Damage Token → ${n}`); vals.push(`${fk}|Damage`);
         opts.push(`Surge Token → ${n}`); vals.push(`${fk}|Surge`);
       }
       const chosenCount = (game._fieldSupplyPicks || []).length;
@@ -13372,9 +13435,9 @@ export function resolveAbility(abilityId, context) {
     const isRanged = effectiveAttackType === 'range' || effectiveAttackType === 'ranged';
 
     if (isRanged) {
-      // First of 2 attacks: -1 Hit, no attack-type swap yet (stays Ranged).
+      // First of 2 attacks: -1 Damage, no attack-type swap yet (stays Ranged).
       // Track attacksRemaining so combat-bridge's post-attack hook can:
-      //   (a) re-stamp -1 Hit + grant the 2nd free attack
+      //   (a) re-stamp -1 Damage + grant the 2nd free attack
       //   (b) on attacksRemaining=0, flip attackTypeOverride[figureKey] = 'melee'
       game.overheatedActive = game.overheatedActive || {};
       game.overheatedActive[selfFk] = { attacksRemaining: 2 };
@@ -13385,7 +13448,7 @@ export function resolveAbility(abilityId, context) {
       game.freeAttackBonusPending[selfFk] = { from: 'Overheated' };
       return {
         applied: true,
-        logMessage: `**Overheated** — **${meta.dcName}**: 4 Strain (queued). 2 Ranged attacks queued at −1 Hit each. Attack type becomes Melee after both resolve.`,
+        logMessage: `**Overheated** — **${meta.dcName}**: 4 Strain (queued). 2 Ranged attacks queued at −1 Damage each. Attack type becomes Melee after both resolve.`,
         refreshDcEmbed: true,
         pendingStrainCost: {
           figureKey: selfFk,

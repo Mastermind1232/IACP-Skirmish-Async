@@ -258,7 +258,7 @@
     },
     "Balancing Force": {
       "type": "ccEffect",
-      "label": "Each player chooses up to 3 figures; roll 1 red die; each chosen figure recovers Damage = Hit results",
+      "label": "Each player chooses up to 3 figures; roll 1 red die; each chosen figure recovers Damage = Damage results",
       "balancingForceEffect": true,
       "wiredStatus": "wired"
     },
@@ -930,7 +930,7 @@
     },
     "Corrupting Force": {
       "type": "ccEffect",
-      "label": "Each player chooses up to 3 figures; roll 1 blue die; each chosen figure suffers Damage = Hit results",
+      "label": "Each player chooses up to 3 figures; roll 1 blue die; each chosen figure suffers Damage = Damage results",
       "corruptingForceEffect": true,
       "wiredStatus": "wired"
     },
@@ -1284,7 +1284,7 @@
     },
     "Desperate Escape": {
       "type": "ccEffect",
-      "label": "At end of round: move up to 6 spaces (or, if your Kuiil is defeated, discard to distribute 2 Hit Tokens among friendlies)",
+      "label": "At end of round: move up to 6 spaces (or, if your Kuiil is defeated, discard to distribute 2 Damage Tokens among friendlies)",
       "kuilSplitMode": true,
       "mpBonus": 6,
       "isMoveX": true,
@@ -3018,10 +3018,10 @@
     },
     "Looking for a Fight": {
       "type": "ccEffect",
-      "label": "Gain 1 Hit Token; then move 1 space or push an adjacent SMALL figure 1 space",
+      "label": "Gain 1 Damage Token; then move 1 space or push an adjacent SMALL figure 1 space",
       "powerTokenGain": 1,
       "lookingForAFightChoice": true,
-      "logMessage": "Gained **1 Hit Token**. Choose: Move 1 space OR push an adjacent SMALL figure 1 space.",
+      "logMessage": "Gained **1 Damage Token**. Choose: Move 1 space OR push an adjacent SMALL figure 1 space.",
       "wiredStatus": "wired"
     },
     "Lord of the Sith": {
@@ -3665,7 +3665,7 @@
     },
     "Prepared for Battle": {
       "type": "ccEffect",
-      "label": "Gain 1 Hit + 1 Block; if LEADER, adjacent friendly gains 1 Hit + 1 Block",
+      "label": "Gain 1 Damage + 1 Block; if LEADER, adjacent friendly gains 1 Damage + 1 Block",
       "preparedForBattle": true,
       "wiredStatus": "wired"
     },
@@ -3809,8 +3809,8 @@
     },
     "Rapid Recalibration": {
       "type": "ccEffect",
-      "label": "While attacking before defender rerolls: choose 1 attack die, set to any side",
-      "rerollOneAttackDie": true,
+      "label": "While attacking, before the defender rerolls: choose 1 attack die and turn it to any side",
+      "setAttackDieFace": 1,
       "wiredStatus": "wired"
     },
     "rapid_fire_ig11": {
@@ -3996,14 +3996,14 @@
     },
     "Retaliation": {
       "type": "ccEffect",
-      "label": "Choose one: Become Focused; Gain 2 Hit Tokens; or Move up to 2 spaces",
+      "label": "Choose one: Become Focused; Gain 2 Damage Tokens; or Move up to 2 spaces",
       "chooseOne": [
         {
           "label": "Become Focused",
           "applyFocus": true
         },
         {
-          "label": "Gain 2 Hit Tokens",
+          "label": "Gain 2 Damage Tokens",
           "hitTokenGain": 2
         },
         {
@@ -5211,7 +5211,7 @@
     },
     "Transmit the Plans": {
       "type": "ccEffect",
-      "label": "Distribute 2 Hit Tokens among friendly figures; if adjacent to a terminal, gain 2 VP (use /editvp +2)",
+      "label": "Distribute 2 Damage Tokens among friendly figures; if adjacent to a terminal, gain 2 VP (use /editvp +2)",
       "grantHitTokensToActivating": 2,
       "vpNoteIfAdjacentTerminal": 2,
       "wiredStatus": "wired"
@@ -5337,7 +5337,7 @@
     },
     "Veteran Instincts": {
       "type": "ccEffect",
-      "label": "Gain 1 Hit/Surge token, then 1 Block/Evade token (constrained pair)",
+      "label": "Gain 1 Damage/Surge token, then 1 Block/Evade token (constrained pair)",
       "wiredStatus": "wired",
       "constrainedAttackDefenseTokenPair": true
     },

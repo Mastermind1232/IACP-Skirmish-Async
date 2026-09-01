@@ -117,7 +117,7 @@ describe('Re-audit: library entry shapes', () => {
     assert.equal(e.nextActivationFreeAttack.dice, undefined, 'must not hard-code a dice pool');
   });
 
-  it('Retaliation grants Hit Tokens, not choosable Power Tokens', () => {
+  it('Retaliation grants Damage Tokens, not choosable Power Tokens', () => {
     const e = getAbility('Retaliation');
     const tokenOpt = e.chooseOne.find((o) => /token/i.test(o.label));
     assert.ok(tokenOpt, 'Retaliation has a token option');

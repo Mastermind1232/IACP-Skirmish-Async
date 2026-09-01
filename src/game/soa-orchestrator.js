@@ -288,7 +288,7 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
 
   // Advanced Weapons Research (Director Krennic): per destruct 2026-05-07
   // — IS SoA per card text. "At the start of your activation, a friendly
-  // figure within 2 spaces may gain 1 Hit Token or 1 Surge Token." Range
+  // figure within 2 spaces may gain 1 Damage Token or 1 Surge Token." Range
   // extends to 3 with the Advanced Com Systems attachment (handled by
   // awrRange helper). Owner = Krennic's player (the activator). Sub-
   // prompt enumerates eligible friendlies at fire time, then a second
@@ -822,7 +822,7 @@ export function enumerateActivatorSoaDescriptors(game, opts) {
 
   // Tempt (Emperor Palpatine): SoA player-driven trigger. Card text "At
   // the start of your activation, a figure of your choice suffers 1 Damage
-  // and gains 1 Hit Token." No range restriction (per alexanbv 2026-05-10).
+  // and gains 1 Damage Token." No range restriction (per alexanbv 2026-05-10).
   // Owner = activating player. Candidate list (any figure on the board +
   // NPCs) is enumerated at FIRE time so positions are fresh.
   if (dcName === 'Emperor Palpatine') {

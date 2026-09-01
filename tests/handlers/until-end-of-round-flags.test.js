@@ -25,6 +25,7 @@ describe('clearUntilEndOfRoundFlags (start-of-EOR-phase clearing)', () => {
     const game = {
       // until-end-of-round effects (should be cleared)
       roundInTheShadows: { playerNum: 1, figureKey: 'Obi-Wan-1' },
+      // Disarm is NOT an until-end-of-round effect (see below).
       disarmPermanentWeakened: { 'Trooper-1': true },
       roundDefenderCannotBeTargetedUnlessWithinSpaces: { playerNum: 1, spaces: 3, figureKey: 'Obi-Wan-1' },
       roundProgrammingOverrideTrait: { 1: 'TROOPER', 2: 'HUNTER' },
@@ -32,9 +33,18 @@ describe('clearUntilEndOfRoundFlags (start-of-EOR-phase clearing)', () => {
 
     clearUntilEndOfRoundFlags(game);
 
-    // In the Shadows + Disarm (pre-existing members)
+    // In the Shadows (pre-existing member)
     assert.equal(game.roundInTheShadows, null, 'In the Shadows should fall off at EOR-phase start');
-    assert.deepEqual(game.disarmPermanentWeakened, {}, 'Disarm Weakened lock should clear at EOR-phase start');
+
+    // Disarm is NOT round-scoped. The card prints no duration and alexanbv
+    // 2026-08-31 ruled it "permanent for the rest of game". It used to be reset
+    // here AND in ROUND_OBJECT_FLAGS at round start, so the lock never survived
+    // the round it landed in.
+    assert.deepEqual(
+      game.disarmPermanentWeakened,
+      { 'Trooper-1': true },
+      'Disarm Weakened lock must survive the end of the round',
+    );
 
     // I Must Go Alone — targeting/defense buff, "until the end of the round"
     assert.equal(

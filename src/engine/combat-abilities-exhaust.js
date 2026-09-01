@@ -22,9 +22,9 @@ const slug = (s) => String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(
 // effect: the combat field bumped on use. requireDamagedTarget: Feeding Frenzy
 // only applies while the target has already suffered damage.
 const EXHAUST_BONUS_ABILITIES = [
-  { name: 'Scavenged Weaponry', window: 'on_declare', effect: 'hit', label: '+1 Hit' },
+  { name: 'Scavenged Weaponry', window: 'on_declare', effect: 'hit', label: '+1 Damage' },
   { name: 'Explosive Armaments', window: 'mods', effect: 'blast', label: 'Blast 1' },
-  { name: 'Feeding Frenzy', window: 'mods', effect: 'hit', label: '+1 Hit', requireDamagedTarget: true },
+  { name: 'Feeding Frenzy', window: 'mods', effect: 'hit', label: '+1 Damage', requireDamagedTarget: true },
 ];
 
 /** The attacker's own DC attachments (combat.attackerMsgId), or []. */

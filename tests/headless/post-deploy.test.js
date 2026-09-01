@@ -535,7 +535,7 @@ describe('Post-deploy: interactive ability state', () => {
       tokenRemaining: 4,
     };
 
-    // Simulate granting a Hit Token
+    // Simulate granting a Damage Token
     activeAbility.tokenRemaining -= 1;
     assert.strictEqual(activeAbility.tokenRemaining, 3);
 

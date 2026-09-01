@@ -1,7 +1,7 @@
 /**
  * Hunt Dissent (Agent Kallus): when your opponent plays a Command
  * card for the FIRST TIME each round, post Kallus's controller a
- * "distribute 2 Hit Tokens" picker over friendly figures within 1
+ * "distribute 2 Damage Tokens" picker over friendly figures within 1
  * space (within 3 if [Advanced Com Systems] is attached to Kallus).
  * Limit once per round (the once-per-round gate fires on the FIRST
  * opponent CC of the round; subsequent CCs do not re-prompt).
@@ -132,7 +132,7 @@ async function _postHuntDissentPicker(game, ctx) {
     .setLabel(`Done (${remaining} unspent)`)
     .setStyle(ButtonStyle.Secondary));
   const rows = chunkButtonsToRows(btns).slice(0, 5);
-  const content = `<@${ownerId}> 🛡️ **Hunt Dissent** — Opponent played their first Command card. Distribute up to **2 Hit Tokens** among friendly figures within **${pending.range}** space${pending.range === 1 ? '' : 's'} of Agent Kallus (${remaining} remaining):`;
+  const content = `<@${ownerId}> 🛡️ **Hunt Dissent** — Opponent played their first Command card. Distribute up to **2 Damage Tokens** among friendly figures within **${pending.range}** space${pending.range === 1 ? '' : 's'} of Agent Kallus (${remaining} remaining):`;
   await logGameAction?.(game, client, content, { components: rows, allowedMentions: { users: [ownerId] }, phase: 'ROUND', icon: 'card', interrupt: true });
 }
 

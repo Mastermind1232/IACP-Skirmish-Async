@@ -16,7 +16,57 @@ list is empty. The batch tooling (`next.py N <tag>` to build a contact sheet and
 dump the stored data, `mark.py <tag>` once the sheet has actually been read) is
 kept for the Deployment Card sweep, which is the next 182 cards.
 
-## Open questions for alexanbv
+## alexanbv's rulings, 2026-08-31 — all four closed
+
+**"Hit does not exist. Everything should be damage."** The attack-results
+symbol is Damage everywhere, and so is the token: the 14 cards that said "Hit
+Token" now say "Damage Token". The engine had already been calling that face
+`Damage` internally (`grantPowerTokens(game, fk, 'Damage', 1)`, 28 call sites,
+zero using `'Hit'`) and `game-state.js` still carries a `'Hit'` to `'Damage'`
+power-token migration, so the card data has caught up to the code rather than
+the reverse. Ability names that merely contain the word are untouched: Order
+Hit (Jabba), Critical Hit (Mak Eshka'rey), Hard to Hit, Hit and Run.
+
+**"Disarm is permanent for the rest of game."** The lock was being cleared in
+TWO places — at round start via `ROUND_OBJECT_FLAGS`, and at end of round via
+`clearUntilEndOfRoundFlags` — so it never survived the round it landed in, and
+removing either one alone would have been a silent no-op. Both are gone.
+`game-state.js` already listed `disarmPermanentWeakened` among the maps that are
+"explicitly game-persistent and never cleared by a round boundary", so the two
+resets had been contradicting the file that documents them.
+
+**"Dioxis is start of activation and one strain, not damage."** Retimed from
+`duringActivation` to `startOfActivation`. The Strain was already right; the
+Season 12 image showing the Damage symbol is superseded, and the card stays on
+the do-not-correct list.
+
+**"Rapid recall is a picker. A dice picker face is needed."** Two corrections
+were sent to alexanbv here, both mine to make.
+
+First, the claim that the engine had no set-die-to-a-chosen-face mechanism was
+wrong: There Is No Try has had one since 2026-06-21.
+
+Second, and more serious, the claim that Rapid Recalibration resolved as a
+random reroll was only half true. The card has two play paths. The **gate**
+path — offered in the attacker reroll window — was already a correct two-stage
+die turn via `_makeDieTurnResolver` in `src/handlers/combat.js`, sharing its
+factory with Zeb / Lasat Honor Guard and quoting alexanbv's 2026-06-16 ruling
+that Rapid Recal fires last in the attacker reroll stage while Zeb fires after
+all rerolls. The **hand** path — playing the card from hand during an attack,
+which `cc-timing.js` permits — went through `resolveAbility`, where the library
+had it on `rerollOneAttackDie`, the shared random-reroll counter. So the same
+card behaved differently depending on how it was played.
+
+The hand path now turns the die. The face logic is lifted into a shared
+`src/game/die-face-picker.js` covering both attack and defense pools, because
+There Is No Try's copy was hardcoded to defense. There Is No Try and the Zeb
+factory are deliberately NOT migrated onto it yet — they work, and churning two
+correct cards in the same pass is not worth it without a reason.
+
+Open: which Zeb and Ezra abilities alexanbv meant, so they can be checked for
+the same split-path problem.
+
+## Superseded: the three questions as originally raised
 
 ### 1. "Hit" vs "Damage" for the attack-results symbol
 
