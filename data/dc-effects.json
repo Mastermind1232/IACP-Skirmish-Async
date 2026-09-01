@@ -767,7 +767,7 @@
         "LEADER",
         "BRAWLER"
       ],
-      "subname": "TENACIOUS INTERROGATOR",
+      "subname": "TENACIOUS INVESTIGATOR",
       "cost": 6,
       "health": 11,
       "speed": 4,
@@ -798,14 +798,14 @@
       ]
     },
     "Ahsoka Tano": {
-      "abilityText": "Special Action (Force Leap): Place your figure in an empty space within 6 spaces.\n\nVigor: At the start of your activation, you may gain 2 movement points or 1 Block Token.\n\nTwin Sabers: While attacking, you may reroll all attack die or force the defender to reroll all defense die.",
+      "abilityText": "Special Action (Force Leap): Place your figure in an empty space within 6 spaces.\n\nVigor: At the start of your activation, you may gain 2 movement points or 1 Block Token.\n\nTwin Sabers: While attacking, you may reroll all attack dice or force the defender to reroll all defense dice.",
       "keywords": [
         "FORCE USER",
         "LEADER",
         "SPY"
       ],
       "subname": "REBEL INSTIGATOR",
-      "cost": 8,
+      "cost": 7,
       "health": 12,
       "speed": 4,
       "figures": 1,
@@ -838,7 +838,7 @@
       ]
     },
     "Alliance Ranger (Elite)": {
-      "abilityText": "Guerilla: After you resolve an attack, if the defender was defeated, become Hidden\n\nElite Sniper: While attacking, if the target space is 5 or more spaces away, you may reroll up to 2 attack dice.",
+      "abilityText": "Guerrilla: After you resolve an attack, if the defender was defeated, become Hidden.\n\nElite Sniper: While attacking, if the target space is 5 or more spaces away, you may reroll up to 2 attack dice.",
       "keywords": [
         "TROOPER",
         "HUNTER"
@@ -876,7 +876,7 @@
       ]
     },
     "Alliance Ranger (Regular)": {
-      "abilityText": "Guerilla: After you resolve an attack, if the defender was defeated, become Hidden.\n\nSniper: While attacking, if the target space is 5 or more spaces away, you reroll 1 attack die.",
+      "abilityText": "Guerrilla: After you resolve an attack, if the defender was defeated, become Hidden.\n\nSniper: While attacking, if the target space is 5 or more spaces away, you may reroll 1 attack die.",
       "keywords": [
         "TROOPER",
         "HUNTER"
@@ -1178,7 +1178,7 @@
       ]
     },
     "BD-1": {
-      "abilityText": "Damaged Scomplink: You are not counted for the purpose of control.\n\nSpecial Action (Stim Canister): An adjacent friendly figure recovers 2 Health.\n\nDouble Action Special (Terminal Slicing): Discard an adjacent terminal to draw 1 Command card.",
+      "abilityText": "Damaged Scomplink: You are not counted for the purpose of control.\n\nSpecial Action (Stim Canister): An adjacent friendly figure recovers 2 Damage.\n\nDouble Action Special (Terminal Slicing): Discard an adjacent terminal to draw 1 Command card.",
       "keywords": [
         "DROID",
         "TECHNICIAN"
@@ -1201,7 +1201,7 @@
       "unique": true
     },
     "Bib Fortuna": {
-      "abilityText": "Dirty Dealing: You cannot be included in the same army as any REBEL Deployment cards.\n\nSpecial Action (Bartered Information): Choose another friendly SCUM figure within 2 spaces. Then, you may spend 1 VP to choose another such figure. Each chose figure becomes Focused.\n\nIllicit Arms: While a friendly figure is attacking, if your army's affiliation is SCUM, you may discard 1 Command card from your hand to apply +1 Damage to the attack results. Limit once per attack.",
+      "abilityText": "Dirty Dealing: You cannot be included in the same army as any REBEL Deployment cards.\n\nSpecial Action (Bartered Information): Choose another friendly SCUM figure within 2 spaces. Then, you may spend 1 VP to choose another such figure. Each chosen figure becomes Focused.\n\nIllicit Arms: While a friendly figure is attacking, if your army's affiliation is SCUM, you may discard 1 Command card from your hand to apply +1 Damage to the attack results. Limit once per attack.",
       "keywords": [
         "LEADER",
         "SMUGGLER"
@@ -1242,7 +1242,7 @@
       ]
     },
     "Biv Bodhrik": {
-      "abilityText": "Special Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Damage to each attack's results.\n\nSurge (Suppression): After resolving a Ranged attack, if it did not miss due to accuracy, the target suffers Strain equal to the number of targets Block, Evade, and Dodge, results, to a maximum of 2.",
+      "abilityText": "Special Action (Multi-Fire): Perform 2 attacks. Each attack must have a different target. Apply -1 Damage to each attack's results.\n\nSurge (Suppression): After resolving a Ranged attack, if it did not miss due to accuracy, the target suffers Strain equal to the number of the target's Block, Evade, and Dodge results, to a maximum of 2.",
       "keywords": [
         "HUNTER",
         "BRAWLER"
@@ -1327,7 +1327,7 @@
       ]
     },
     "Boba Fett": {
-      "abilityText": "Wrist Cord: Once per round, you may spend 2 movement points to choose a SMALL figure within 3 spaces in your line of sight. Push the choses figure up to 3 spaces into a space adjacent to you.\n\nWrist Flamethrower: Once per round, you may spend 2 movement points to choose a space within 2 spaces. Each other figure on or adjacent to that spaces suffers 1 Damage and 1 Strain, then becomes Weakened.\n\nEE-3 Carbine: When you declare an attack, you may spend 2 movement points to change one of your attack die to a red die. Limit once per attack.",
+      "abilityText": "Wrist Cord: Once per round, you may spend 2 movement points to choose a SMALL figure within 3 spaces in your line of sight. Push the chosen figure up to 3 spaces to a space adjacent to you.\n\nWrist Flamethrower: Once per round, you may spend 2 movement points to choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain, then becomes Weakened.\n\nEE-3 Carbine: When you declare an attack, you may spend 2 movement points to change one of your attack dice to a red die. Limit once per attack.",
       "keywords": [
         "HUNTER",
         "VEHICLE",
@@ -1445,7 +1445,7 @@
       ]
     },
     "BT-1": {
-      "abilityText": "Special Action (Missile Salvo): Perform up to 3 Ranged attacks with different targets using 1 blue, 1 red, or 1 yellow die. Limit once per die. Apply +3 accuracy to each of these attacks.\n\nAssassin: Before you declare an attack, become Focused.",
+      "abilityText": "Special Action (Missile Salvo): Perform up to 3 Ranged attacks with different targets using 1 blue, 1 red, or 1 yellow die. Limit once per die. Apply +3 Accuracy to each of these attacks.\n\nAssassin: Before you declare an attack, become Focused.",
       "keywords": [
         "DROID",
         "HEAVY WEAPON",

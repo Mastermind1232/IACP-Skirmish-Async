@@ -1073,7 +1073,7 @@
     },
     "Karabast!": {
       "cost": 1,
-      "playableBy": "Zeb Orellios",
+      "playableBy": "Zeb Orrelios",
       "timing": "duringActivation",
       "effect": "Use during your activation. For each Damage you have suffered, you may choose a hostile figure within 2 spaces. Each chosen figure suffers 1 Damage.",
       "abilityId": "Karabast!"

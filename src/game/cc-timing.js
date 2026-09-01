@@ -923,6 +923,26 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
 }
 
 /** Check if DC keywords match a CC's playableBy (shared logic for all CC timing checks). */
+/**
+ * Droid designations are spelled inconsistently across the two card files: the
+ * Deployment Cards are keyed "C-3P0" and "K-2S0" with a DIGIT ZERO, while the
+ * Command Cards that are restricted to them say "C-3PO" and "K-2SO" with the
+ * LETTER O. The two glyphs are near-identical in the card font, so the data
+ * picked up both spellings.
+ *
+ * The consequence was silent: `Etiquette and Protocol` and `Blend In` matched no
+ * Deployment Card at all, so they were UNPLAYABLE BY THEIR OWN FIGURES and
+ * simply never appeared as legal. Nothing threw. Found 2026-08-31.
+ *
+ * Folding O to 0 for comparison only — display strings are untouched — makes the
+ * two spellings the same name. This is deliberately narrow: it resolves a glyph
+ * ambiguity, NOT misspellings. "Saw Gerrera" vs the "Saw Gerrerra" DC key is a
+ * genuine typo and is left to be fixed in the data.
+ */
+function _foldDroidDigits(s) {
+  return String(s).replace(/o/g, '0');
+}
+
 export function ccPlayableByMatches(playableBy, dcName, displayName, hasDarksaberImperial = false, extraKeywords = null, game = null) {
   if (!playableBy) return false;
   if (playableBy.toLowerCase() === 'any figure') return true;
@@ -934,8 +954,12 @@ export function ccPlayableByMatches(playableBy, dcName, displayName, hasDarksabe
   const baseKeywords = kwMap[dcName] || kwMap[dcBase];
   const keywords = extraKeywords ? [...(baseKeywords || []), ...extraKeywords] : baseKeywords;
   const alternatives = playableBy.split(/\s+or\s+/i).map((s) => s.trim().toLowerCase());
+  const dFold = _foldDroidDigits(d);
+  const dispFold = _foldDroidDigits(disp);
   for (const p of alternatives) {
     if (d.includes(p) || p.includes(d) || disp.includes(p) || p.includes(disp)) return true;
+    const pFold = _foldDroidDigits(p);
+    if (dFold.includes(pFold) || pFold.includes(dFold) || dispFold.includes(pFold) || pFold.includes(dispFold)) return true;
     if (keywords && Array.isArray(keywords) && keywords.some((k) => String(k).toLowerCase() === p)) return true;
   }
   // The Darksaber: FORCE USER with Darksaber can use IMPERIAL Command cards
