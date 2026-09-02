@@ -150,9 +150,11 @@ export function getDcBaseName(dcName) {
  * own resolver, which is what this shared helper is for. A fold that lives in
  * one comparison site and not the others is how the second half survived.
  *
- * Deliberately narrow: it resolves a glyph ambiguity, NOT misspellings.
- * "Saw Gerrera" vs the "Saw Gerrerra" DC key is a genuine typo and is left to
- * be fixed in the data. Display strings are never touched.
+ * Deliberately narrow: it resolves a glyph ambiguity, NOT misspellings. The
+ * comparable Saw Gerrera case is handled the right way instead: his DC key is
+ * spelled correctly and only the ART FILENAME carries the typo, so
+ * data/dc-images.json maps the good name to the bad file. Display strings are
+ * never touched here.
  *
  * @param {string} s
  * @returns {string}
