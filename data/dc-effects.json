@@ -4147,7 +4147,7 @@
       ]
     },
     "K-2S0": {
-      "abilityText": "Vague and Unconvincing: While defending, your player and your opponent cannot spend power tokens or play Command cards.\n\nCassian Said I Had To: Once per round, when a friendly LEADER enters an adjacent space, gain up to 1 Damage Token.\n\nSpecial Action (Continually Unexpected): If you have any combination of 2 Damage Tokens or 2 Surge Tokens, perform a Ranged attack using your attack pool.",
+      "abilityText": "Vague and Unconvincing: While defending, your player and your opponent cannot spend power tokens or play Command cards.\n\nCassian Said I Had To: Once per round, when a friendly LEADER enters an adjacent space, gain up to 1 Damage Token.\n\nSpecial Action (Continually Unexpected): If you have any combination of 2 Damage and/or Surge Tokens, perform a Ranged attack using your attack pool.",
       "keywords": [
         "DROID",
         "BRAWLER",
@@ -4190,7 +4190,7 @@
       ]
     },
     "Kanan Jarrus": {
-      "abilityText": "Force Vision: At the start of you activation, your opponent chooses one of their ready groups and must activate it next if possible.\n\nSoresu Form: While a friendly figure within 3 spaces is defending, it may reroll 1 die. If it does, convert each Dodge result to 2 Block and 1 Evade and, if that figure is not FORCE USER, you suffer 1 Strain.",
+      "abilityText": "Force Vision: At the start of your activation, your opponent chooses one of their ready groups and must activate it next if possible.\n\nSoresu Form: While a friendly figure within 3 spaces is defending, it may reroll 1 defense die. If it does, convert each Dodge result to 2 Block and 1 Evade and, if that figure is not FORCE USER, you suffer 1 Strain.",
       "keywords": [
         "FORCE USER",
         "LEADER"

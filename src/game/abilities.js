@@ -4,7 +4,7 @@
  */
 import { getAbilityLibrary, getDcEffects, getDiceData, getCcEffect, getCcEffectsData, getMapData, getMapTokensData } from '../data-loader.js';
 import { parseCoord, normalizeCoord, getFootprintCells, edgeKey } from './coords.js';
-import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels } from './dc-helpers.js';
+import { dcNameFromFigureKey, parseFigureKey, getMaxPowerTokens, figureChoiceLabels, isSameDcName } from './dc-helpers.js';
 import { figureKeyForActivation, grantActionToFigure } from './activation-state.js';
 import { grantPowerTokens, consumeMovementPoints, figureMpRemaining, grantMovementBank } from './game-helpers.js';
 import { faceOptionsFor, formatFaceLabel, applyFaceToDie, totalsFor, formatTotals } from './die-face-picker.js';
@@ -7724,14 +7724,17 @@ export function resolveAbility(abilityId, context) {
     // Find K-2SO's DC (the card is playableBy K-2SO).
     const dcList = getDcList(game, playerNum) || [];
     const msgIds = getDcMessageIds(game, playerNum) || [];
-    let k2Idx = dcList.findIndex(dc => dc && !dc.defeated && (dc.dcName === 'K-2SO'));
+    // isSameDcName folds the O/0 droid ambiguity: the DC is keyed "K-2S0"
+    // with a DIGIT ZERO while this card, and the character, are spelled with
+    // the LETTER O. An === against either spelling finds nothing half the time.
+    let k2Idx = dcList.findIndex(dc => dc && !dc.defeated && isSameDcName(dc.dcName, 'K-2SO'));
     if (k2Idx < 0) return { applied: false, manualMessage: '**Blend In** — K-2SO is not in play.' };
     const k2MsgId = msgIds[k2Idx];
     // Mark every live K-2SO figure as untargetable until Blend In is discarded.
     game.blendInUntargetable = game.blendInUntargetable || {};
     let tagged = 0;
     for (const fk of Object.keys(game.figurePositions?.[playerNum] || {})) {
-      if (!fk.startsWith('K-2SO-')) continue;
+      if (!isSameDcName(dcNameFromFigureKey(fk), 'K-2SO')) continue;
       if (!game.figurePositions[playerNum][fk]) continue;
       game.blendInUntargetable[fk] = { playerNum, msgId: k2MsgId || null };
       tagged++;

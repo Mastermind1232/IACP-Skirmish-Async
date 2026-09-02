@@ -136,6 +136,47 @@ export function getDcBaseName(dcName) {
 }
 
 /**
+ * Fold the LETTER O to a DIGIT ZERO for name comparison only.
+ *
+ * Droid designations are spelled inconsistently across the two card files: the
+ * Deployment Cards are keyed "C-3P0" and "K-2S0" with a DIGIT ZERO, while the
+ * Command Cards restricted to them say "C-3PO" and "K-2SO" with the LETTER O.
+ * The two glyphs are near-identical in the card font, so the data picked up
+ * both spellings and neither side is wrong to read.
+ *
+ * The consequence is silent: nothing throws, the card simply matches no
+ * Deployment Card and is never offered. Found 2026-08-31 in the CC legality
+ * gate; the SAME mismatch was still live in the figure PICKER and in Blend In's
+ * own resolver, which is what this shared helper is for. A fold that lives in
+ * one comparison site and not the others is how the second half survived.
+ *
+ * Deliberately narrow: it resolves a glyph ambiguity, NOT misspellings.
+ * "Saw Gerrera" vs the "Saw Gerrerra" DC key is a genuine typo and is left to
+ * be fixed in the data. Display strings are never touched.
+ *
+ * @param {string} s
+ * @returns {string}
+ */
+export function foldDroidDigits(s) {
+  return String(s ?? '').replace(/o/gi, '0');
+}
+
+/**
+ * True if two DC names are the same card, tolerating the O/0 droid ambiguity.
+ * Case-insensitive, and compares base names so "[DG 2]" / "(Elite)" suffixes
+ * do not defeat it.
+ *
+ * @param {string} a
+ * @param {string} b
+ * @returns {boolean}
+ */
+export function isSameDcName(a, b) {
+  if (!a || !b) return false;
+  return foldDroidDigits(getDcBaseName(a).toLowerCase())
+      === foldDroidDigits(getDcBaseName(b).toLowerCase());
+}
+
+/**
  * True if this DC is a "figureless" card (Skirmish Upgrade, attachment, etc.) — no physical figure on the map.
  * @param {string} dcName
  * @returns {boolean}

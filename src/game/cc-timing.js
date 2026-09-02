@@ -3,7 +3,7 @@
  * Uses game state to derive play context and cc-effects timing field.
  */
 import { getCcEffect, getDcKeywords, getDcEffects, getFigureSize, isDcUnique } from '../data-loader.js';
-import { getDcBaseName, dcNameFromFigureKey } from './dc-helpers.js';
+import { getDcBaseName, dcNameFromFigureKey, foldDroidDigits } from './dc-helpers.js';
 import { getPlayerId, getDcList, getDcMessageIds, getDcAttachments, getCcHand, ccDiscardKey, ccHandKey, opponentPlayerNum } from './player-helpers.js';
 import { isDcDepleted, depleteDc } from './card-state-helpers.js';
 
@@ -923,25 +923,10 @@ export function isCcPlayLegalByRestriction(game, playerNum, cardName, getEffect 
 }
 
 /** Check if DC keywords match a CC's playableBy (shared logic for all CC timing checks). */
-/**
- * Droid designations are spelled inconsistently across the two card files: the
- * Deployment Cards are keyed "C-3P0" and "K-2S0" with a DIGIT ZERO, while the
- * Command Cards that are restricted to them say "C-3PO" and "K-2SO" with the
- * LETTER O. The two glyphs are near-identical in the card font, so the data
- * picked up both spellings.
- *
- * The consequence was silent: `Etiquette and Protocol` and `Blend In` matched no
- * Deployment Card at all, so they were UNPLAYABLE BY THEIR OWN FIGURES and
- * simply never appeared as legal. Nothing threw. Found 2026-08-31.
- *
- * Folding O to 0 for comparison only — display strings are untouched — makes the
- * two spellings the same name. This is deliberately narrow: it resolves a glyph
- * ambiguity, NOT misspellings. "Saw Gerrera" vs the "Saw Gerrerra" DC key is a
- * genuine typo and is left to be fixed in the data.
- */
-function _foldDroidDigits(s) {
-  return String(s).replace(/o/g, '0');
-}
+// The O/0 droid-name fold now lives in dc-helpers as foldDroidDigits, so the
+// legality gate here and the figure picker in handlers/cc-hand.js cannot drift
+// apart again. See that function for why the ambiguity exists.
+const _foldDroidDigits = foldDroidDigits;
 
 export function ccPlayableByMatches(playableBy, dcName, displayName, hasDarksaberImperial = false, extraKeywords = null, game = null) {
   if (!playableBy) return false;

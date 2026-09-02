@@ -1,4 +1,4 @@
-import { getDcBaseName } from './dc-helpers.js';
+import { getDcBaseName, foldDroidDigits } from './dc-helpers.js';
 import { markMapDirty } from './game-helpers.js';
 
 // ── Opponent helper ─────────────────────────────────────────────────────────
@@ -196,15 +196,26 @@ export function dcMatchesPlayableBy(dcName, playableBy, getDcEffectsFn, getDcKey
       if (kwLower.includes('small')) return true;
       continue;
     }
-    // Name match — check both dcName and optional displayName
+    // Name match — check both dcName and optional displayName.
+    //
+    // Folded through foldDroidDigits so the O/0 droid-name ambiguity does not
+    // hide the only eligible card. The CC LEGALITY gate learned this on
+    // 2026-08-31; this PICKER did not, so Blend In and Etiquette and Protocol
+    // became legal to play and then offered "No eligible Deployment Cards"
+    // for their own figure. Both halves now share one helper.
+    const altFold = foldDroidDigits(alt);
     const dcLow = dcBase.toLowerCase();
+    const dcFold = foldDroidDigits(dcLow);
     if (dcLow.includes(alt) || alt.includes(dcLow)) return true;
+    if (dcFold.includes(altFold) || altFold.includes(dcFold)) return true;
     if (displayName) {
       const dispBase = String(displayName)
         .replace(/\s*\[(?:DG|Group) \d+\]$/i, '')
         .replace(/\s*\((?:Elite|Regular)\)\s*$/i, '')
         .trim().toLowerCase();
       if (dispBase.includes(alt) || alt.includes(dispBase)) return true;
+      const dispFold = foldDroidDigits(dispBase);
+      if (dispFold.includes(altFold) || altFold.includes(dispFold)) return true;
     }
     // Decompose into affiliation + keyword parts
     const words = alt.split(/\s+/);
