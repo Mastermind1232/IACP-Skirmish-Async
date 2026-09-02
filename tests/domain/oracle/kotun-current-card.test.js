@@ -119,7 +119,9 @@ describe('Squad Cohesion is attacker-only, on every path', () => {
 
 describe('the innate band is still Professional alone', () => {
   test('the current card confirms the +3 Accuracy removal was right', () => {
-    assert.deepEqual(dc['Ko-Tun Feralo'].abilities, ['Professional']);
+    // Professional lives in `passives` since 2026-09-02 — it is a keyword.
+    assert.deepEqual(dc['Ko-Tun Feralo'].passives, ['Professional']);
+    assert.ok(!(dc['Ko-Tun Feralo'].abilities || []).includes('+3 Accuracy'));
     assert.ok(dc['Ko-Tun Feralo'].surgeAbilities.includes('accuracy 3'), 'it is a surge');
     assert.equal(row('+3 Accuracy'), undefined, 'and not an attack modifier row');
   });

@@ -1682,6 +1682,7 @@
         "flamethrower_terro"
       ],
       "passives": [
+        "Professional",
         "Efficient Travel"
       ],
       "specials": [
@@ -1692,11 +1693,13 @@
       "unique": true,
       "affiliation": "Imperial",
       "abilities": [
-        "Professional",
         "Mounted"
       ]
     },
     "Cara Dune": {
+      "passives": [
+        "Professional"
+      ],
       "abilityText": "Shock and Awe: When you declare an attack, you may replace 1 Yellow die in your attack pool with 1 Red die. Limit once per round.\n\nSmash: Once during your activation, choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Damage results. Then, if it is SMALL, you may push it 1 space to a space adjacent to you.\n\nHunker Down: While defending, if you share a corner or edge with a space containing blocking, impassable, or difficult terrain, apply +1 Evade to your defense results.",
       "keywords": [
         "TROOPER",
@@ -1733,8 +1736,7 @@
         "hunker_down"
       ],
       "abilities": [
-        "+1 Accuracy",
-        "Professional"
+        "+1 Accuracy"
       ]
     },
     "Cassian Andor": {
@@ -2222,6 +2224,7 @@
       "health": 9,
       "speed": 4,
       "passives": [
+        "Professional",
         "Efficient Travel"
       ],
       "figures": 1,
@@ -2253,7 +2256,6 @@
       "elite": true,
       "affiliation": "Imperial",
       "abilities": [
-        "Professional",
         "Mounted"
       ]
     },
@@ -2940,6 +2942,7 @@
       "health": 8,
       "speed": 4,
       "passives": [
+        "Professional",
         "Reach"
       ],
       "figures": 2,
@@ -2958,10 +2961,7 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Scum",
-      "abilities": [
-        "Professional"
-      ]
+      "affiliation": "Scum"
     },
     "Gar Saxon": {
       "abilityText": "Airborne Commander: Friendly Mobile figures within 4 spaces can use your surge abilities.\n\nPersonal Combat Shield: Whenever you spend a Block while defending, apply +1 Evade to the defense results.\n\nSpecial Action (Gar Saxon's Flamethrower): Choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain and discards 1 Power Token.",
@@ -4263,6 +4263,9 @@
       ]
     },
     "Ko-Tun Feralo": {
+      "passives": [
+        "Professional"
+      ],
       "abilityText": "Arms Distribution: After deployment and at the start of your activation, a friendly figure within 3 spaces may gain 1 Power Token.\n\nDead Precise: While a friendly figure within 3 spaces is attacking, if that figure spent a power token during that attack, that figure may reroll up to 1 attack die and apply -1 Dodge to the defense results.\n\nSquad Cohesion: When a friendly REBEL figure within 3 spaces declares an attack, it may spend a Power Token from a friendly REBEL figure within 3 spaces of itself for its effect.",
       "keywords": [
         "TROOPER",
@@ -4296,9 +4299,6 @@
         "squad_cohesion_kotun",
         "dead_precise_kotun",
         "arms_distribution_kotun"
-      ],
-      "abilities": [
-        "Professional"
       ]
     },
     "Krrsantan": {
@@ -4756,7 +4756,9 @@
         "damage 2",
         "pierce 3"
       ],
-      "passives": [],
+      "passives": [
+        "Professional"
+      ],
       "attachment": false,
       "elite": true,
       "unique": true,
@@ -4764,9 +4766,6 @@
       "specialAbilityIds": [
         "adaptive_skills_mara_jade",
         "fast_learner_mara_jade"
-      ],
-      "abilities": [
-        "Professional"
       ]
     },
     "Maul": {
@@ -5564,15 +5563,16 @@
         "damage 1",
         "damage 2"
       ],
-      "passives": [],
+      "passives": [
+        "Professional"
+      ],
       "attachment": false,
       "elite": true,
       "affiliation": "Imperial",
       "abilities": [
         "Weaken",
         "Stun Batons",
-        "Shield",
-        "Professional"
+        "Shield"
       ]
     },
     "Riot Trooper (Regular)": {
@@ -5624,6 +5624,7 @@
       "health": 10,
       "speed": 5,
       "passives": [
+        "Professional",
         "Reach"
       ],
       "figures": 2,
@@ -5645,7 +5646,6 @@
       "elite": true,
       "affiliation": "Imperial",
       "abilities": [
-        "Professional",
         "Pierce 1"
       ]
     },
@@ -5905,6 +5905,9 @@
       ]
     },
     "Scout Trooper (Elite)": {
+      "passives": [
+        "Professional"
+      ],
       "abilityText": "Camouflage: Hostile figures 4 or more spaces away from you cannot draw line of sight to you. You do not block line of sight for those figures.\n\nFind Weakness: While attacking, apply +3 Accuracy and -1 Evade to the results.\n\nExploit Weakness: While attacking a figure with a HARMFUL condition, apply +1 Surge to the attack results.",
       "keywords": [
         "SPY",
@@ -5937,10 +5940,7 @@
       ],
       "attachment": false,
       "elite": true,
-      "affiliation": "Imperial",
-      "abilities": [
-        "Professional"
-      ]
+      "affiliation": "Imperial"
     },
     "Second Sister": {
       "abilityText": "Special Action (Force Leap): Place your figure in an empty space within 6 spaces.\n\nSpecial Action (Saber Orbit): Choose up to 3 adjacent hostile figures. For each of those figures, perform a Melee attack using 1 red die targeting that figure.\n\nSurge (Mastery): Choose and re-draw a FORCE USER Command card of cost 1 or less in your discard pile. Limit once per round.",
@@ -6309,6 +6309,7 @@
       "health": 7,
       "speed": 4,
       "passives": [
+        "Professional",
         "Mobile"
       ],
       "figures": 2,
@@ -6330,7 +6331,6 @@
       "elite": true,
       "affiliation": "Scum",
       "abilities": [
-        "Professional",
         "+2 Accuracy",
         "Pierce 1"
       ]

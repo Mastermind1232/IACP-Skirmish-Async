@@ -37,7 +37,13 @@ const rowsFor = (c) => abilitiesForCard(c) || [];
 describe('the phantom +3 Accuracy innate', () => {
   for (const card of ['Ko-Tun Feralo', 'Scout Trooper (Elite)']) {
     test(`${card}: innate is Professional alone, and +3 Accuracy stays a surge`, () => {
-      assert.deepEqual(raw[card].abilities, ['Professional']);
+      // Professional moved from `abilities` to `passives` on 2026-09-02
+      // (alexanbv: "it is a keyword"), so the innate band is now expressed in
+      // the keyword bucket. What matters here is unchanged: no bare +3 Accuracy
+      // anywhere in either bucket.
+      assert.deepEqual(raw[card].passives, ['Professional']);
+      assert.ok(!(raw[card].abilities || []).includes('+3 Accuracy'));
+      assert.ok(!(raw[card].passives || []).includes('+3 Accuracy'));
       assert.ok(raw[card].surgeAbilities.includes('accuracy 3'), 'the surge is untouched');
     });
 

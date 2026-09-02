@@ -1,12 +1,16 @@
 /**
  * `oncePer` is enforced generically now, not per-branch.
  *
- * 17 library entries declare it. Until 2026-09-02 exactly TWO were enforced —
- * Shield Gauntlets and Wrist Cord — each by a hardcoded check inside its own
- * branch using its own flag name. The other fifteen declared a limit that
- * nothing read, so Electrified Knuckledusters, Smash, Parting Gift, Demolish,
- * Jetpack Rocket and Wrist Flamethrower were all simply repeatable: click as
- * many times as you like.
+ * 17 library entries declare it. Until 2026-09-02 exactly FOUR were enforced —
+ * Shield Gauntlets, Wrist Cord, Jetpack Rocket and Wrist Flamethrower — each by
+ * a hardcoded check inside its own branch with its own flag name. Thirteen
+ * declared a limit that nothing read.
+ *
+ * Three of those four guards gated 'round' ONLY, and said so in their own
+ * comments. That is why the ACTIVATION-scoped abilities routed through the very
+ * same branches were repeatable: Electrified Knuckledusters and Smash through
+ * rollOneDieTarget, Demolish through areaEffect. They were not merely ungated,
+ * they passed through a gate built to ignore them.
  *
  * alexanbv 2026-09-02: "You need to fix the once per issue and unify."
  *
@@ -165,5 +169,85 @@ describe('Professional is read from the innate list, not the prose', () => {
     return import('../../../src/game/combat.js').then(({ getInnateRerollAbilities }) => {
       assert.deepEqual(getInnateRerollAbilities('Jyn Erso').filter((a) => a.pool === 'attack'), []);
     });
+  });
+});
+
+describe('CONFIRMATION: every declared limit actually bites', () => {
+  // alexanbv 2026-09-02: "Confirm that once per x limitations are now correct."
+  // Drives all 17 through the real wrapper rather than asserting on source.
+  const DC = 'Super Commando (Elite)';
+  const mk = () => ({
+    gameId: 'g', currentRound: 1,
+    figurePositions: { 1: { [`${DC}-1-0`]: 'a1' }, 2: { 'Stormtrooper-1-0': 'a2' } },
+    figurePowerTokens: {},
+    movementBank: { m: { perFig: { 0: { remaining: 9, total: 9 } } } },
+    dcActionsData: { m: { selectedFigure: 0 } },
+    dcMessageMeta: new Map([['m', { gameId: 'g', playerNum: 1, dcName: DC }]]),
+    roundFigureAbilityUsed: {},
+  });
+  const ctx = (game) => ({ game, playerNum: 1, msgId: 'm',
+    meta: { dcName: DC, displayName: DC, playerNum: 1 } });
+
+  test('all 16 per-figure limits refuse a second use', () => {
+    // The flag is set directly so the LIMIT is isolated from each ability's own
+    // fixture needs (map, target, LOS). What is under test is the wrapper.
+    const notGated = [];
+    for (const [id, v] of declaring) {
+      if (v.oncePer === 'attack') continue;
+      const game = mk();
+      if (v.oncePer === 'round') game.roundFigureAbilityUsed[`${DC}-1-0_${id}`] = true;
+      else game.dcActionsData.m.oncePerActivationUsed = { [`0_${id}`]: true };
+      const r = resolveAbility(id, ctx(game));
+      const refused = r?.applied === false && /already used this (round|activation)/.test(r?.manualMessage || '');
+      if (!refused) notGated.push(id);
+    }
+    assert.deepEqual(notGated, [], 'these still allow a second use');
+  });
+
+  test('ee3_carbine is the only one left out, and it is attack-scoped', () => {
+    const attackScoped = declaring.filter(([, v]) => v.oncePer === 'attack').map(([k]) => k);
+    assert.deepEqual(attackScoped, ['ee3_carbine']);
+  });
+
+  test('ACTIVATION scope: a real use marks the flag (Shield Gauntlets)', () => {
+    const game = mk();
+    assert.equal(resolveAbility('shield_gauntlets', ctx(game)).applied, true);
+    assert.equal(game.dcActionsData.m.oncePerActivationUsed['0_shield_gauntlets'], true,
+      'the mark lands in the activation-scoped container');
+    assert.equal(game.roundFigureAbilityUsed[`${DC}-1-0_shield_gauntlets`], undefined,
+      'and NOT in the round-scoped one');
+    assert.match(resolveAbility('shield_gauntlets', ctx(game)).manualMessage, /already used this activation/);
+  });
+
+  test('ROUND scope: a real use marks the flag (I Am One With The Force)', () => {
+    const game = mk();
+    assert.equal(resolveAbility('i_am_one_with_the_force', ctx(game)).applied, true);
+    assert.equal(game.roundFigureAbilityUsed[`${DC}-1-0_i_am_one_with_the_force`], true,
+      'the mark lands in the round-scoped container');
+    assert.equal(game.dcActionsData.m.oncePerActivationUsed, undefined,
+      'and NOT in the activation-scoped one');
+    assert.match(resolveAbility('i_am_one_with_the_force', ctx(game)).manualMessage, /already used this round/);
+  });
+
+  test('a round limit survives a new activation, an activation limit does not', () => {
+    // The whole point of two containers: one resets sooner than the other.
+    const game = mk();
+    resolveAbility('i_am_one_with_the_force', ctx(game));
+    resolveAbility('shield_gauntlets', ctx(game));
+    game.dcActionsData.m = { selectedFigure: 0 }; // next activation
+    game.movementBank.m.perFig[0] = { remaining: 9, total: 9 };
+    assert.equal(resolveAbility('shield_gauntlets', ctx(game)).applied, true,
+      'activation scope clears when the figure activates again');
+    assert.match(resolveAbility('i_am_one_with_the_force', ctx(game)).manualMessage, /already used this round/,
+      'round scope does NOT');
+  });
+
+  test('an ability with no oncePer is never gated', () => {
+    // Guards against the wrapper gating everything.
+    const game = mk();
+    game.roundFigureAbilityUsed[`${DC}-1-0_scheme_jabba`] = true;
+    game.dcActionsData.m.oncePerActivationUsed = { '0_scheme_jabba': true };
+    const r = resolveAbility('scheme_jabba', ctx(game));
+    assert.ok(!/already used this/.test(r?.manualMessage || ''), 'an unlimited ability must ignore the flags');
   });
 });
