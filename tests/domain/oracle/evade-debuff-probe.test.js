@@ -1,14 +1,20 @@
 /**
- * PROBE-EVADE-DEBUFF: two -1 Evade passives sharing math:
- *   - **Disposable** (Hired Gun Regular, defender) — own defense -1 Evade.
- *   - **Conclusion** (HK-47, attacker) — defender defense -1 Evade.
+ * PROBE-EVADE-DEBUFF: the id predicates for Disposable and Conclusion.
  *
- * Both bumps write to the shared pendingCombat.bonusEvade slot.
- * Pure helpers extracted from combat.js:1880 (Conclusion) and :1893
- * (Disposable).
+ * BOTH ARE -1 DODGE, not -1 Evade, despite this file's name and the helper's.
+ * They were implemented as Evade because the two glyphs are near-identical on
+ * the printed cards. alexanbv 2026-09-02 confirmed Conclusion from the art and
+ * then Hired Gun explicitly: "hired gun (regular) are -1 dodge".
+ *
+ * So `applyEvadeDebuff` is no longer what either ability uses. The tests below
+ * still cover that helper's arithmetic because it remains exported, but the
+ * REAL behaviour of the two abilities is pinned at the bottom of this file.
  */
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   hasDisposableAbility,
   hasConclusionAbility,
@@ -115,5 +121,42 @@ describe('PROBE-EVADE-DEBUFF-004: library + dc-effects wiring', () => {
     const dc = effects.cards?.['HK-47'];
     assert.ok(dc);
     assert.ok((dc.specialAbilityIds || []).includes('conclusion'));
+  });
+});
+
+// ── The behaviour that actually ships ────────────────────────────────────────
+
+describe('PROBE-EVADE-DEBUFF-DODGE: Disposable and Conclusion reduce DODGE', () => {
+  const src = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../src/handlers/combat.js'), 'utf8');
+  // Strip line comments before asserting: the branches explain WHY they no
+  // longer touch bonusEvade, and matching that prose would be a false failure.
+  const code = (text) => text.replace(/^\s*\/\/.*$/gm, '');
+
+  it('Disposable subtracts from bonusDodge, not bonusEvade', () => {
+    const branch = code(src.slice(src.indexOf("id === 'disposable'"), src.indexOf("id === 'cortosis_weave'")));
+    assert.match(branch, /combat\.bonusDodge = \(combat\.bonusDodge \|\| 0\) - 1/,
+      'Hired Gun (Regular) loses a Dodge, not an Evade');
+    assert.ok(!/bonusEvade/.test(branch), 'and must no longer touch bonusEvade');
+  });
+
+  it('Conclusion cancels a Dodge', () => {
+    const branch = code(src.slice(src.indexOf("id === 'conclusion'"), src.indexOf("id === 'dead_precise_dodge'")));
+    assert.match(branch, /conclusionDodgeCancel = true/);
+    assert.ok(!/bonusEvade/.test(branch));
+  });
+
+  it('the shipped card text says Dodge for both', () => {
+    const dc = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../data/dc-effects.json'), 'utf8')).cards;
+    assert.match(dc['Hired Gun (Regular)'].abilityText, /Disposable: While defending, apply -1 Dodge/);
+    assert.match(dc['HK-47'].abilityText, /Conclusion: While attacking, apply -1 Dodge/);
+  });
+
+  it('Jawa Scavenger and Scout Trooper genuinely ARE Evade', () => {
+    // alexanbv 2026-09-02: "Jawa scavengers, scout troopers reference evades".
+    // Pinned so a later sweep does not "correct" these to Dodge by analogy.
+    const dc = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../../../data/dc-effects.json'), 'utf8')).cards;
+    assert.match(dc['Jawa Scavenger (Elite)'].abilityText, /-1 Evade/);
+    assert.match(dc['Jawa Scavenger (Regular)'].abilityText, /-1 Evade/);
+    assert.match(dc['Scout Trooper (Elite)'].abilityText, /-1 Evade/);
   });
 });

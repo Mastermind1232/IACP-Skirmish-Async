@@ -210,7 +210,6 @@ import {
 import {
   hasDisposableAbility,
   hasConclusionAbility,
-  applyEvadeDebuff,
 } from '../game/evade-debuff-helpers.js';
 import { reduceHp, healHp, awardKillVp, awardObjectiveVp, deductVp, applyCondition, applyConditionWithDie, resetCondition, filterCondition, isConditionImmune, dcNameFromFigureKey, parseCoord, getFootprintCells, checkNefariousGains, getMaxPowerTokens, grantPowerTokens, resolveOverflowDiscard, getEffectiveMapSpaces, edgeKey, getInnateRerollAbilities } from '../game/index.js';
 import { getPlayerDisplayName } from '../discord/user-helpers.js';
@@ -2909,9 +2908,12 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     combat.bonusBlock = bonusBlock;
     await thread.send('**Composite Plating** — +1 Block (attacker 4+ spaces away).').catch(discordCatch);
   } else if (id === 'disposable') {
-    const bump = applyEvadeDebuff(combat);
-    combat.bonusEvade = bump.bonusEvade;
-    await thread.send("**Disposable** — −1 Evade applied to defender's defense results.").catch(discordCatch);
+    // -1 DODGE, not Evade (alexanbv 2026-09-02: "hired gun (regular) are -1
+    // dodge"). The two glyphs are near-identical on the card and this was wired
+    // to bonusEvade, so the Hired Gun was losing the wrong defence result.
+    // Mirrors dead_precise_dodge below.
+    combat.bonusDodge = (combat.bonusDodge || 0) - 1;
+    await thread.send("**Disposable** — −1 Dodge applied to this figure's own defense results.").catch(discordCatch);
   } else if (id === 'cortosis_weave') {
     const r = applyCortosisWeave(combat);
     combat.bonusPierce = r.bonusPierce;

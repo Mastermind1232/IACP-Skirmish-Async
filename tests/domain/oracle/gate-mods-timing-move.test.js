@@ -122,9 +122,13 @@ describe('GATE mods timing move: automatics fire in the mods window, once', () =
     assert.equal(combat.bonusBlock || 0, 0, 'Composite Plating must NOT apply when attacker is close');
   });
 
-  it('Disposable (Hired Gun): -1 Evade applied once via the mods window', async () => {
+  it('Disposable (Hired Gun): -1 DODGE applied once via the mods window', async () => {
+    // Was wired to bonusEvade. alexanbv 2026-09-02: "hired gun (regular) are
+    // -1 dodge". Dodge and Evade are near-identical glyphs on the card, which
+    // is how the two were conflated.
     const combat = await attackInto('Hired Gun (Regular)');
-    assert.equal(combat.bonusEvade, -1, 'Disposable must apply -1 Evade exactly once');
+    assert.equal(combat.bonusDodge, -1, 'Disposable must apply -1 Dodge exactly once');
+    assert.ok(!combat.bonusEvade, 'and must not touch Evade');
   });
 
   it('Cortosis Weave (Echo Base Trooper Elite): -2 Pierce applied once', async () => {

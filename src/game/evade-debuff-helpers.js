@@ -1,13 +1,16 @@
 /**
- * Pure helpers for two simple -1 Evade passives:
- *  - **Disposable** (Hired Gun Regular, defender side): own defense
- *    takes -1 Evade. "Paid to take hits."
- *  - **Conclusion** (HK-47, attacker side): -1 Evade to defender
- *    defense results.
+ * Ability-id predicates for two -1 DODGE passives.
  *
- * Both share identical math (bonusEvade -= 1) and the same helper
- * shape. Extracted from src/handlers/combat.js:1880 (Conclusion) and
- * :1892 (Disposable).
+ *  - **Disposable** (Hired Gun Regular, defender side): its OWN defense results
+ *    take -1 Dodge. "Paid to take hits."
+ *  - **Conclusion** (HK-47, attacker side): -1 Dodge to the defender's results.
+ *
+ * NOTE THE FILE NAME. Both were originally implemented as -1 EVADE and both are
+ * actually -1 DODGE (alexanbv: Conclusion 2026-09-02 by card art, Hired Gun
+ * confirmed the same day — "hired gun (regular) are -1 dodge"). Dodge and Evade
+ * are near-identical glyphs on the printed cards, which is how they were
+ * conflated. `applyEvadeDebuff` below is kept only for callers that genuinely
+ * want an Evade debuff; NEITHER of these two uses it any more.
  */
 
 export const DISPOSABLE_ABILITY_ID = 'disposable';
