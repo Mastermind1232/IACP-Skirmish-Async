@@ -304,7 +304,7 @@ Jabba the Hutt,DC,Scheme,1,special_action,None,prompt,TRUE,None,None,None,FALSE,
 Jabba the Hutt,DC,Order Hit,1,special_action,None,prompt,TRUE,a SCUM figure of your choice,None,None,FALSE,"Spend 2 VPs. A SCUM figure of your choice may interrupt to perform an attack, then it gains 2 movement points",vp;damage;gain_mp,Double Action Special
 Jabba the Hutt,DC,Nefarious Gains,1,always,None,automatic,TRUE,None,a hostile figure is defeated,None,FALSE,"When a hostile figure is defeated, gain 1 VP",vp,triggered when hostile figure defeated
 Jarrod Kelvin,DC,Leaping Slash,1,special_action,None,prompt,TRUE,None,None,None,FALSE,"Move up to 2 spaces, then perform an attack",move;damage,None
-Jarrod Kelvin,DC,Droid Master,1,during_setup,None,automatic,TRUE,J4X-7,None,None,FALSE,"At the start of a mission, put J4X-7 into play in an adjacent space. J4X-7 activates at the start or end of your activation. J4X-7 is not counted for the purposes of control",companion_place,None
+Jarrod Kelvin,DC,Droid Master,1,during_setup,None,automatic,TRUE,J4X-7,None,None,FALSE,"At the start of the mission, put J4X-7 into play in an adjacent space. J4X-7 activates at the start or end of your activation. J4X-7 is not counted for the purposes of control",companion_place,None
 Jawa Scavenger (Elite),DC,Take Cover,1,attack:modifiers,defender,prompt,TRUE,None,None,None,FALSE,"While defending, you may apply +1 Block and -1 Evade to the defense results",None,None
 Jawa Scavenger (Regular),DC,Take Cover,1,attack:modifiers,defender,prompt,TRUE,None,None,None,FALSE,"While defending, you may apply +1 Block and -1 Evade to the defense results",None,None
 Jet Trooper (Elite),DC,Agile,1,attack:modifiers,defender,prompt,TRUE,None,None,None,FALSE,"While defending, you may convert 1 Block to 1 Evade",None,None
@@ -1227,7 +1227,7 @@ ISB Infiltrator (Regular),DC,Surge: +1 Damage,1,spend_surges,attacker,prompt,TRU
 J4X-7,Companion DC,Surge: +1 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +1 Damage,None,surge ability
 Jarrod Kelvin,DC,Surge: +2 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +2 Damage,None,surge ability
 Jarrod Kelvin,DC,Surge: Pierce 2,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: Pierce 2,None,surge ability
-Jarrod Kelvin,DC,Surge: gain 1 Power token,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: gain 1 Power token,gain_pt,surge ability
+Jarrod Kelvin,DC,Surge: gain 1 Damage token,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: gain 1 Damage token,gain_pt,surge ability
 Jawa Scavenger (Elite),DC,Surge: +2 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +2 Damage,None,surge ability
 Jawa Scavenger (Elite),DC,Surge: +2 Accuracy,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +2 Accuracy,None,surge ability
 Jawa Scavenger (Elite),DC,Surge: Pierce 2,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: Pierce 2,None,surge ability
@@ -1237,7 +1237,7 @@ Jet Trooper (Elite),DC,Surge: +3 Accuracy,1,spend_surges,attacker,prompt,TRUE,No
 Jet Trooper (Elite),DC,Surge: +2 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +2 Damage,None,surge ability
 Jet Trooper (Elite),DC,Mobile,1,always,None,automatic,TRUE,None,None,None,FALSE,Mobile: this figure does not spend extra movement points for difficult terrain and may move through hostile figures,movement,movement keyword
 Jet Trooper (Regular),DC,Surge: +1 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +1 Damage,None,surge ability
-Jet Trooper (Regular),DC,Surge: +3 Accuracy,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +3 Accuracy,None,surge ability
+Jet Trooper (Regular),DC,Surge: +2 Accuracy,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +2 Accuracy,None,surge ability
 Jet Trooper (Regular),DC,Mobile,1,always,None,automatic,TRUE,None,None,None,FALSE,Mobile: this figure does not spend extra movement points for difficult terrain and may move through hostile figures,movement,movement keyword
 Jyn Erso,DC,"Surge: +1 Accuracy, +1 Damage",1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +1 Accuracy and +1 Damage,None,surge ability
 Jyn Erso,DC,Surge: +1 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +1 Damage,None,surge ability

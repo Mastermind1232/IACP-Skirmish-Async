@@ -3860,7 +3860,7 @@
       "affiliation": "Scum"
     },
     "Jarrod Kelvin": {
-      "abilityText": "Special Action (Leaping Slash): Move up to 2 spaces, then perform an attack.\n\nDroid Master: At the start of a mission, put J4X-7 into play in an adjacent space. J4X-7 activates at the start or end of your activation. J4X-7 is not counted for the purposes of control.",
+      "abilityText": "Special Action (Leaping Slash): Move up to 2 spaces, then perform an attack.\n\nDroid Master: At the start of the mission, put J4X-7 into play in an adjacent space. J4X-7 activates at the start or end of your activation. J4X-7 is not counted for the purposes of control.",
       "keywords": [
         "BRAWLER",
         "LEADER",
@@ -3884,7 +3884,7 @@
       "surgeAbilities": [
         "damage 2",
         "pierce 2",
-        "power token"
+        "hit token"
       ],
       "attachment": false,
       "companion": "J4X-7",
@@ -4038,7 +4038,7 @@
       ],
       "surgeAbilities": [
         "damage 1",
-        "accuracy 3"
+        "accuracy 2"
       ],
       "attachment": false,
       "affiliation": "Imperial",
