@@ -6406,8 +6406,10 @@ async function advanceTokenPhase(thread, game, combat, completedRole, ctx) {
   combat.tokenPhase = null;
   if (completedRole === 'attacker') {
     const defTokens = getEligibleTokens(game, combat.target.figureKey, 'defender');
-    const hasDefCohesion = (combat.squadCohesionTokens?.defender || []).length > 0;
-    if (defTokens.length > 0 || hasDefCohesion) {
+    // Squad Cohesion is attacker-only (see above), so this condition is the
+    // defender's OWN tokens and nothing else. A defender holding none gets no
+    // window; it used to get one whenever a nearby friendly held a token.
+    if (defTokens.length > 0) {
       combat.tokenPhase = 'defender';
       const defenderPlayerNum = opponentPlayerNum(combat.attackerPlayerNum);
       const defOwnerId = getPlayerId(game, defenderPlayerNum);
@@ -6477,11 +6479,20 @@ export async function sendOnDeclareTokenWindow(thread, game, combat, role, ctx) 
       }
     }
     if (!combat.vagueAndUnconvincing) {
+      // ATTACKER ONLY. The card reads "When a friendly REBEL figure within 3
+      // spaces DECLARES AN ATTACK, it may spend a power token from a friendly
+      // REBEL figure within 3 spaces of itself" — there is no defender clause,
+      // and alexanbv ruled it attacker-only on 2026-06-16.
+      //
+      // That ruling reached the gate path (combat-abilities-tokens.js and
+      // handlers/combat.js:2282, both of which pass null for the defender) but
+      // not this older inline path, which went on building a defender pool. A
+      // defending Rebel could borrow a nearby friendly's Block or Evade token
+      // for months after the ruling. Found in the 2026-09-02 sweep.
       combat.squadCohesionTokens = combat.squadCohesionTokens || {};
       const scAtk = getSquadCohesionTokens(game, combat, 'attacker');
       if (scAtk) combat.squadCohesionTokens.attacker = scAtk.cohesionTokens;
-      const scDef = getSquadCohesionTokens(game, combat, 'defender');
-      if (scDef) combat.squadCohesionTokens.defender = scDef.cohesionTokens;
+      delete combat.squadCohesionTokens.defender;
     }
     combat._onDeclarePrepared = true;
   }

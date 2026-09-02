@@ -156,6 +156,17 @@ export function getInnateRerollAbilities(dcName) {
   const card = getDcEffect(dcName);
   const text = (card?.abilityText || '').toLowerCase();
   const abilities = [];
+  // Professional and Targeting Computer are INNATE KEYWORDS: they live in the
+  // card's innate list, and only some cards happen to also name them in prose.
+  // Matching prose alone silently dropped the reroll for every card that does
+  // not — Cara Dune, Dewback Rider, Scout Trooper (Elite) and Super Commando
+  // (Elite) all print Professional and never write the word in their text box.
+  // Ko-Tun made it visible: her text mentioned Professional only inside an
+  // incidental aside ("stacks with Professional") that the 2026-09-02 sweep
+  // removed when correcting Dead Precise to the printed card, and the reroll
+  // vanished with it. Read the list first, prose second.
+  const innate = (card?.passives || []).map((k) => String(k).toLowerCase());
+  const hasInnate = (name) => innate.includes(name) || new RegExp(name, 'i').test(text);
   // Use whitelisted ability names where possible so the button label
   // matches the printed card. Falls back to generic "While Attacking
   // Reroll" / "While Defending Reroll" for cards whose ability is
@@ -167,9 +178,9 @@ export function getInnateRerollAbilities(dcName) {
   // the same abilityText yields exactly ONE attack-die reroll entry (not
   // two). Without this, a single named ability double-counts.
   const atkMatch = text.match(/while attacking,\s*(?:you may\s+)?reroll\s+(?:up to\s+)?(\d+)\s+attack\s+di/);
-  if (/targeting computer/i.test(text)) {
+  if (hasInnate('targeting computer')) {
     abilities.push({ id: 'targeting-computer', label: 'Use Targeting Computer', pool: 'attack', remainingUses: 1 });
-  } else if (/professional/i.test(text)) {
+  } else if (hasInnate('professional')) {
     abilities.push({ id: 'professional', label: 'Use Professional', pool: 'attack', remainingUses: 1 });
   } else if (atkMatch) {
     const n = parseInt(atkMatch[1], 10) || 1;

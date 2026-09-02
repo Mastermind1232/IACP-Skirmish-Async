@@ -534,7 +534,84 @@ function figureIndexFromKey(figureKey) {
  * @returns {{ applied: boolean, manualMessage?: string, drewCards?: string[], freeAction?: boolean, grantsAction?: boolean, requiresSpaceChoice?: boolean, validSpaces?: string[] }}
  *   freeAction: true — ability costs no action; the caller will restore the action point that was decremented.
  */
+/**
+ * Generic `oncePer` enforcement.
+ *
+ * 17 library entries declare `oncePer`. Until 2026-09-02 exactly two were
+ * enforced — Shield Gauntlets and Wrist Cord — each by its own hardcoded check
+ * inside its own branch, using its own flag name. Every other one declared a
+ * limit that nothing read, so Electrified Knuckledusters, Smash, Parting Gift,
+ * Demolish, Jetpack Rocket and Wrist Flamethrower were all repeatable.
+ * alexanbv 2026-09-02: "You need to fix the once per issue and unify."
+ *
+ * Scope is PER FIGURE, matching both prior implementations and the printed
+ * wording ("Once per figure per round" on Jetpack Rocket; alexanbv 2026-05-11
+ * on Shield Gauntlets, "once during your activation PER FIGURE").
+ *
+ *   'round'      → game.roundFigureAbilityUsed, cleared at round start
+ *                  (ROUND_OBJECT_FLAGS) and remapped by checkpoint.js.
+ *   'activation' → game.dcActionsData[msgId], reassigned fresh by
+ *                  activation-setup.js:434 each time the group activates.
+ *   'attack'     → NOT handled here. ee3_carbine is the only one, its limit is
+ *                  per-attack rather than per-figure, and the combat object is
+ *                  not reliably in scope at this layer.
+ *
+ * The mark happens only on `applied === true`. Two-phase abilities return
+ * `requiresChoice` first and resolve on a later call, so marking any earlier
+ * would burn the use on the prompt rather than the effect.
+ */
+function _oncePerKey(abilityId, entry, context) {
+  const scope = entry?.oncePer;
+  if (scope !== 'round' && scope !== 'activation') return null;
+  const { game, meta, msgId } = context || {};
+  if (!game) return null;
+  const figIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
+  const dgMatch = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
+  const dgIndex = dgMatch ? dgMatch[1] : '1';
+  if (scope === 'round') {
+    if (!meta?.dcName) return null;
+    return { scope, key: `${meta.dcName}-${dgIndex}-${figIdx}_${abilityId}` };
+  }
+  if (msgId == null || !game.dcActionsData?.[msgId]) return null;
+  return { scope, key: `${figIdx}_${abilityId}` };
+}
+
+function _oncePerUsed(context, k) {
+  if (!k) return false;
+  const { game, msgId } = context;
+  return k.scope === 'round'
+    ? !!game.roundFigureAbilityUsed?.[k.key]
+    : !!game.dcActionsData?.[msgId]?.oncePerActivationUsed?.[k.key];
+}
+
+function _oncePerMark(context, k) {
+  if (!k) return;
+  const { game, msgId } = context;
+  if (k.scope === 'round') {
+    game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
+    game.roundFigureAbilityUsed[k.key] = true;
+    return;
+  }
+  const ad = game.dcActionsData?.[msgId];
+  if (!ad) return;
+  ad.oncePerActivationUsed = ad.oncePerActivationUsed || {};
+  ad.oncePerActivationUsed[k.key] = true;
+}
+
 export function resolveAbility(abilityId, context) {
+  const entry = abilityId ? getAbility(abilityId) : null;
+  const limit = _oncePerKey(abilityId, entry, context);
+  if (limit && _oncePerUsed(context, limit)) {
+    const label = entry?.label || abilityId;
+    const when = limit.scope === 'round' ? 'this round' : 'this activation';
+    return { applied: false, manualMessage: `**${label}** — already used ${when} by this figure.` };
+  }
+  const result = _resolveAbilityInner(abilityId, context);
+  if (limit && result?.applied === true) _oncePerMark(context, limit);
+  return result;
+}
+
+function _resolveAbilityInner(abilityId, context) {
   let entry = abilityId ? getAbility(abilityId) : null;
   if (!entry || entry.type === 'surge') {
     return { applied: false, manualMessage: 'Resolve manually (see rules).' };
@@ -667,19 +744,8 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve **${entry.label}** manually.` };
     const enemyNum = opponentPlayerNum(playerNum);
     const label = entry.label || 'Push';
-    // oncePer:'round' enforcement (Wrist Cord). Compute the activating figure
-    // key (figureKey-scoped → automatically per-figure within the round) and
-    // gate, mirroring the rollOneDieTarget guard at :3623/:3640.
-    const _ptwrSelF = game?.dcActionsData?.[msgId]?.selectedFigure ?? 0;
-    const _ptwrDgM = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
-    const _ptwrDgI = _ptwrDgM ? _ptwrDgM[1] : '1';
-    const _ptwrSelfFk = meta?.dcName ? `${meta.dcName}-${_ptwrDgI}-${_ptwrSelF}` : null;
-    if (entry.oncePer === 'round' && _ptwrSelfFk) {
-      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-      if (game.roundFigureAbilityUsed[`${_ptwrSelfFk}_${abilityId}`]) {
-        return { applied: false, manualMessage: `**${label}** — already used this round by **${dcNameFromFigureKey(_ptwrSelfFk)}**.` };
-      }
-    }
+    // oncePer:'round' (Wrist Cord) is enforced generically by the resolveAbility
+    // wrapper now — same per-figure key, same roundFigureAbilityUsed container.
     // Resolve which player owns a given figure key (needed when targeting friendly or any figure)
     const _findOwner = (fk) => {
       if (game.figurePositions?.[1]?.[fk] != null) return 1;
@@ -708,11 +774,6 @@ export function resolveAbility(abilityId, context) {
       if (entry.mpCostToActivate) {
         const _mpFigIdx = game.dcActionsData?.[msgId]?.selectedFigure ?? 0;
         consumeMovementPoints(game, msgId, entry.mpCostToActivate, _mpFigIdx);
-      }
-      // Mark oncePer:'round' used after the push commits (Wrist Cord).
-      if (entry.oncePer === 'round' && _ptwrSelfFk) {
-        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-        game.roundFigureAbilityUsed[`${_ptwrSelfFk}_${abilityId}`] = true;
       }
       const dcDisplay = meta?.displayName || meta?.dcName || label;
       const targetName = dcNameFromFigureKey(targetFigureKey);
@@ -3276,24 +3337,13 @@ export function resolveAbility(abilityId, context) {
     const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
     const dgIndex = dgMatch ? dgMatch[1] : '1';
     const figureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
-    // oncePer enforcement per alexanbv 2026-05-11 — Shield Gauntlets is
-    // "once during your activation" PER FIGURE. Track on actionsData
-    // (per-figure-per-activation), which resets next time this figure
-    // activates.
-    if (entry.oncePer === 'activation') {
-      actionsData.shieldGauntletsUsed = actionsData.shieldGauntletsUsed || {};
-      if (actionsData.shieldGauntletsUsed[selectedFig]) {
-        return { applied: false, manualMessage: `**${entry.label}** — already used this activation by figure #${selectedFig + 1}.` };
-      }
-    }
+    // oncePer:'activation' (alexanbv 2026-05-11 — "once during your activation"
+    // PER FIGURE) is enforced generically by the resolveAbility wrapper now,
+    // on the same per-figure-per-activation dcActionsData container.
     const remaining = figureMpRemaining(game, msgId, selectedFig);
     const mpCost = entry.spendMpForBlockToken;
     if (remaining < mpCost) return { applied: false, manualMessage: `**${entry.label}** requires ${mpCost} MP (you have ${remaining}).` };
     consumeMovementPoints(game, msgId, mpCost, selectedFig);
-    if (entry.oncePer === 'activation') {
-      actionsData.shieldGauntletsUsed = actionsData.shieldGauntletsUsed || {};
-      actionsData.shieldGauntletsUsed[selectedFig] = true;
-    }
     grantPowerTokens(game, figureKey, 'Block', 1);
     return { applied: true, freeAction: !!entry.freeAction, refreshMovementBank: true, activeMsgId: msgId, refreshDcEmbed: true, logMessage: `**${entry.label}** — Spent ${mpCost} MP → gained 1 **Block Token** (${remaining - mpCost} MP remaining).` };
   }
@@ -3703,17 +3753,12 @@ export function resolveAbility(abilityId, context) {
       const _hwrDgM = (meta?.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
       const _hwrDgI = _hwrDgM ? _hwrDgM[1] : '1';
       const _hwrSelfFk = meta?.dcName ? `${meta.dcName}-${_hwrDgI}-${_hwrSelF}` : null;
-      // oncePer: 'round' (per alexanbv 2026-05-11 — "once per FIGURE per
-      // round" for Super Commando Jetpack Rocket; the slug stored under
-      // roundFigureAbilityUsed is figureKey-scoped, so the cap is
-      // automatically per-figure within the round).
-      if (entry.oncePer === 'round' && _hwrSelfFk) {
-        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-        const _hwrUsedKey = `${_hwrSelfFk}_${abilityId}`;
-        if (game.roundFigureAbilityUsed[_hwrUsedKey]) {
-          return { applied: false, manualMessage: `**${entry.label}** — already used this round by **${dcNameFromFigureKey(_hwrSelfFk)}**.` };
-        }
-      }
+      // oncePer (alexanbv 2026-05-11 — "once per FIGURE per round" for Super
+      // Commando Jetpack Rocket) is enforced generically by the resolveAbility
+      // wrapper now, on the same figureKey-scoped roundFigureAbilityUsed key.
+      // Note this branch USED to gate 'round' only, which is why the
+      // activation-scoped rollOneDie abilities (Electrified Knuckledusters,
+      // Smash) were repeatable.
       // Phase 2: target chosen → check MP cost, roll die, apply damage
       if (targetFigureKey) {
         // Check MP cost (per-figure; alexanbv 2026-06-13)
@@ -3722,11 +3767,6 @@ export function resolveAbility(abilityId, context) {
           const remaining = figureMpRemaining(game, msgId, _hwrFigIdx);
           if (remaining < mpCost) return { applied: false, manualMessage: `**${entry.label}** requires ${mpCost} MP (you have ${remaining}).` };
           consumeMovementPoints(game, msgId, mpCost, _hwrFigIdx);
-        }
-        // Mark used after MP successfully spent.
-        if (entry.oncePer === 'round' && _hwrSelfFk) {
-          game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-          game.roundFigureAbilityUsed[`${_hwrSelfFk}_${abilityId}`] = true;
         }
         const color = entry.rollOneDie;
         const rolled = rollAttackFaceWithIdx(color);
@@ -4216,13 +4256,6 @@ export function resolveAbility(abilityId, context) {
         const _spent = consumeMovementPoints(game, msgId, entry.mpCost, _mpFigIdx2);
         if (_spent > 0) results.push(`spent ${_spent} MP`);
       }
-      // Mark oncePer:'round' used after the area effect resolves (Wrist
-      // Flamethrower). figureKey-scoped → per figure within the round. Only
-      // 'round' (NOT 'activation') cases routed through this handler are set.
-      if (entry.oncePer === 'round' && _faeSelfFigureKey) {
-        game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-        game.roundFigureAbilityUsed[`${_faeSelfFigureKey}_${abilityId}`] = true;
-      }
       const spaceUpper = String(chosenSpace).toUpperCase();
       return {
         applied: true,
@@ -4239,15 +4272,9 @@ export function resolveAbility(abilityId, context) {
     const dgMatch = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/);
     const dgIndex = dgMatch ? dgMatch[1] : '1';
     const activatingFigureKey = `${meta.dcName}-${dgIndex}-${selectedFig}`;
-    // oncePer:'round' enforcement (Wrist Flamethrower). figureKey-scoped → per
-    // figure within the round, mirroring rollOneDieTarget at :3623/:3640. Only
-    // round (NOT activation) cases routed through this handler are gated here.
-    if (entry.oncePer === 'round' && activatingFigureKey) {
-      game.roundFigureAbilityUsed = game.roundFigureAbilityUsed || {};
-      if (game.roundFigureAbilityUsed[`${activatingFigureKey}_${abilityId}`]) {
-        return { applied: false, manualMessage: `**${entry.label}** — already used this round by **${dcNameFromFigureKey(activatingFigureKey)}**.` };
-      }
-    }
+    // oncePer (Wrist Flamethrower) is enforced generically by the resolveAbility
+    // wrapper now, on the same figureKey-scoped key. This branch also gated
+    // 'round' only, so Demolish (activation-scoped) was repeatable.
     const activatingPos = game.figurePositions?.[playerNum]?.[activatingFigureKey];
     if (!activatingPos) return { applied: false, manualMessage: `Resolve **${entry.label}** manually (position unknown).` };
     const boardState = getBoardStateForMovement(game, null);
