@@ -4920,7 +4920,7 @@
       ]
     },
     "Murne Rin": {
-      "abilityText": "Special Action (False Orders): Choose a hostile figure with a figure cost of 4 or less within 4 spaces. Perform a move or attack with that figure.\n\nSpecial Action (Field Report): Choose up to 2 friendly figures within 4 spaces with 2 or less attack dice in their printed attack pool. The chosen figures become Hidden.\n\nFigurehead: Before a friendly figure within 4 spaces suffers Damage or Strain, you may suffer Damage or Strain to prevent 1 of that Damage or Strain.",
+      "abilityText": "Special Action (False Orders): Choose a hostile figure with a figure cost of 4 or less within 4 spaces. Perform a move or attack with that figure.\n\nSpecial Action (Field Report): Choose up to 2 friendly figures within 4 spaces with 2 or less attack dice in their printed attack pool. The chosen figures become Hidden.\n\nFigurehead: Before a friendly figure within 4 spaces suffers Strain, you may suffer 1 Damage to prevent 1 of that Strain.",
       "keywords": [
         "LEADER",
         "SPY"

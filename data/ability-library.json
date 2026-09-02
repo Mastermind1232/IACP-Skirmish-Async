@@ -1859,7 +1859,7 @@
     "figurehead": {
       "type": "dcSpecial",
       "label": "Figurehead",
-      "description": "Before a friendly figure within 4 spaces suffers Damage or Strain, you may suffer that Damage or Strain instead to prevent 1 of it.",
+      "description": "Before a friendly figure within 4 spaces suffers Strain, you may suffer 1 Damage to prevent 1 of that Strain.",
       "wiredStatus": "wired",
       "freeAction": true
     },
