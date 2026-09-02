@@ -1910,7 +1910,7 @@ export async function handleArmsDistFigPick(interaction, ctx) {
 }
 
 /**
- * Arms Distribution (Deploy): player picks token type (Hit/Surge/Block/Evade).
+ * Arms Distribution (Deploy): player picks token type (Damage/Surge/Block/Evade).
  */
 export async function handleArmsDistTokenPick(interaction, ctx) {
   const { getGame, canActAsPlayer, saveGames, logGameAction, client } = ctx;

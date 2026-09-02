@@ -28,7 +28,17 @@ function _soaTokenTypes(desc) {
       .filter((t) => !used.includes(t))
       .map((t) => ({ key: t, label: t.charAt(0).toUpperCase() + t.slice(1), style: t === 'damage' ? D : P }));
   }
-  if (desc.subPromptKey === 'arms_distribution') return [{ key: 'damage', label: 'Damage', style: D }, { key: 'block', label: 'Block', style: P }];
+  // Arms Distribution prints the generic "?" badge. alexanbv 2026-09-02:
+  // "? Is always any of the 4." This offered Damage/Block only, while the
+  // DEPLOY half of the very same ability (post-deploy.js:1900) already offered
+  // all four — the two halves of one card disagreed with each other.
+  //
+  // Contrast 'awr' below, which stays at two: Director Krennic's card names the
+  // types outright ("1 Damage Token or 1 Surge Token"), it is not a "?".
+  if (desc.subPromptKey === 'arms_distribution') {
+    return ['damage', 'block', 'surge', 'evade']
+      .map((t) => ({ key: t, label: t.charAt(0).toUpperCase() + t.slice(1), style: t === 'damage' ? D : P }));
+  }
   if (desc.subPromptKey === 'awr') return [{ key: 'damage', label: 'Damage', style: D }, { key: 'surge', label: 'Surge', style: P }];
   return [];
 }
