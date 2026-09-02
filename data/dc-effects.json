@@ -1832,7 +1832,7 @@
       "attack": {
         "dice": [
           "green",
-          "green",
+          "yellow",
           "yellow"
         ],
         "type": "melee"
