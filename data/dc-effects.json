@@ -5375,7 +5375,8 @@
       "figures": 2,
       "attack": {
         "dice": [
-          "blue"
+          "blue",
+          "green"
         ],
         "type": "range"
       },

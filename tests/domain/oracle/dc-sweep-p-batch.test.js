@@ -96,9 +96,12 @@ describe('the rest of the batch matches its art', () => {
     assert.equal(r.health, 15);
   });
 
-  test('Rebel Pathfinder (Elite): one blue attack die only', () => {
-    // A single-die attack pool looks truncated; it is not.
-    assert.deepEqual(dc['Rebel Pathfinder (Elite)'].attack, { dice: ['blue'], type: 'range' });
+  test('Rebel Pathfinder (Elite): blue AND green', () => {
+    // I first read this off a downscaled contact sheet, saw one die, and wrote
+    // a test asserting the single die was CORRECT. alexanbv: "You have the
+    // attack pool wrong for pathfinders." The card badge is blue + green.
+    // Reading a stat badge needs the full-resolution card, not the sheet.
+    assert.deepEqual(dc['Rebel Pathfinder (Elite)'].attack, { dice: ['blue', 'green'], type: 'range' });
     assert.deepEqual(dc['Rebel Pathfinder (Elite)'].surgeAbilities, ['accuracy 3', 'damage 2']);
     assert.deepEqual(dc['Rebel Pathfinder (Elite)'].abilities, ['+1 Accuracy']);
   });
