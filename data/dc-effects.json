@@ -1776,12 +1776,11 @@
     "Chewbacca": {
       "abilityText": "Special Action (Slam): Choose 1 adjacent hostile figure and roll 1 red die. That figure suffers Damage equal to the Damage results. Then, if it is SMALL, you may push it 1 space.\n\nProtector: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Block to the defense results. Limit 1 \"Protector\" ability used per attack.",
       "keywords": [
-        "TECHNICIAN",
         "SMUGGLER",
         "WOOKIEE",
         "GUARDIAN"
       ],
-      "subname": "LOYAL WOOKIE",
+      "subname": "LOYAL WOOKIEE",
       "cost": 15,
       "health": 14,
       "speed": 4,
