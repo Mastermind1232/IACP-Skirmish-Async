@@ -2401,7 +2401,7 @@
       ]
     },
     "Dr. Royce Hemlock": {
-      "abilityText": "Special Action (Neurotoxin): Choose a space within 3 spaces and roll 1 yellow die. All hostile figures on or adjacent to that space become Weakened and suffer Damage equal to the Damage results.\n\nSpecial Action (Neurostim): Choose an adjacent friendly figure and roll 1 yellow die. If you rolled Damage, that figure gains a Block Token. Then, if you rolled a Surge, that figure gains a Surge Token.",
+      "abilityText": "Special Action (Neurotoxin): Choose a space within 3 spaces and roll 1 yellow die. All hostile figures on or adjacent to that space become Weakened and suffer Damage equal to the Damage results.\n\nSpecial Action (Neurostim): Choose an adjacent friendly figure and roll 1 yellow die. If you rolled Damage, that figure gains a Damage Token. Then, if you rolled a Surge, that figure gains a Surge Token.",
       "keywords": [
         "LEADER",
         "TECHNICIAN"
