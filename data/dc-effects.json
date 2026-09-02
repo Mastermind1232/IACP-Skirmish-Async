@@ -3351,7 +3351,7 @@
       ]
     },
     "Hired Gun (Regular)": {
-      "abilityText": "Parting Shot: When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated.\n\nDisposable: While defending, apply -1 Dodge to your defense results.",
+      "abilityText": "Parting Shot: When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack.\n\nDisposable: While defending, apply -1 Dodge to your defense results.",
       "keywords": [
         "SMUGGLER"
       ],
