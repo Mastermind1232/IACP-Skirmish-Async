@@ -75,7 +75,7 @@ describe('DC: All cards have required fields', () => {
   // These must carry `defense: []` rather than omit the key: combat.js:3845
   // normalises a MISSING defense to ['white'], so dropping the field would hand
   // the figure a free white die, while an empty array passes through untouched.
-  const PRINTS_NO_DEFENSE_DIE = ['Kuiil'];
+  const PRINTS_NO_DEFENSE_DIE = ['Kuiil', 'Onar Koma'];
 
   it('every non-attachment non-companion DC has defense dice', () => {
     const missing = allDCs.filter(([k, v]) => !v.attachment && !v.defense?.length && !k.startsWith('[')

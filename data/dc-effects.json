@@ -5100,9 +5100,7 @@
         ],
         "type": "range"
       },
-      "defense": [
-        "black"
-      ],
+      "defense": [],
       "surgeAbilities": [
         "damage 2, accuracy -2",
         "damage 1, accuracy -1"

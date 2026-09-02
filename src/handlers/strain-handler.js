@@ -198,7 +198,7 @@ export async function applyStrain(game, ctx, opts) {
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
           .setCustomId(`figurehead_use_${game.gameId}`)
-          .setLabel('Use Figurehead (Murne suffers 1 Strain → prevent 1)')
+          .setLabel('Use Figurehead (Murne suffers 1 Damage → prevent 1 Strain)')
           .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
           .setCustomId(`figurehead_skip_${game.gameId}`)
@@ -437,6 +437,44 @@ async function _runStrainFollowup(game, ctx, followup) {
   }
 }
 
+/**
+ * Figurehead's cost: Murne suffers 1 Damage (alexanbv 2026-09-02).
+ *
+ * Mirrors _applyDamageFromStrain — same centralized pipeline, so
+ * when-suffers-damage / before-defeated / when-defeated hooks fire — but the
+ * source is the ability rather than a strain conversion, so viaStrain is NOT
+ * set: this is printed Damage, not Damage converted from Strain.
+ */
+async function _applyFigureheadDamage(game, ctx, { figureKey, controllerPlayerNum }) {
+  const { dcHealthState, findDcMessageIdForFigure, processFigureDefeat, client, logGameAction } = ctx;
+  if (!dcHealthState || !findDcMessageIdForFigure || !figureKey) return;
+  const msgId = findDcMessageIdForFigure(game.gameId, controllerPlayerNum, figureKey);
+  if (!msgId) return;
+  const figMatch = figureKey.match(/-(\d+)-(\d+)$/);
+  const figIndex = figMatch ? parseInt(figMatch[2], 10) : 0;
+  const dcName = dcNameFromFigureKey(figureKey);
+  const { applyDamage } = await import('../game/damage-pipeline.js');
+  const { prevHp, newHp, wasDefeated } = await applyDamage(game, {
+    dcHealthState, logGameAction, client,
+  }, {
+    figureKey, msgId, figIndex,
+    amount: 1,
+    controllerPlayerNum,
+    source: 'Figurehead',
+    suppressDamageMessage: true,
+  });
+  await logGameAction?.(game, client, `🛡️ **Figurehead** — **${dcName}**: HP ${prevHp} → ${newHp}.`, { phase: 'ROUND', icon: 'card' });
+  if (wasDefeated && processFigureDefeat) {
+    await processFigureDefeat(game, {
+      defeatedPlayerNum: controllerPlayerNum,
+      figureKey,
+      attackerPlayerNum: null,
+      msgId,
+      dcIdx: -1,
+    }, ctx);
+  }
+}
+
 async function _applyDamageFromStrain(game, ctx, ev) {
   const { dcHealthState, findDcMessageIdForFigure, processFigureDefeat, client, logGameAction } = ctx;
   if (!dcHealthState || !findDcMessageIdForFigure) return;
@@ -604,18 +642,23 @@ export async function handleFigureheadStrainDecision(interaction, ctx) {
     const remaining = Math.max(0, amount - 1);
     await logGameAction?.(
       game, client,
-      `🛡️ **Figurehead** — **${fhLabel || 'Murne Rin'}** suffers **1 Strain** to prevent **1** of **${targetDcName}**'s Strain (${amount} → ${remaining}).`,
+      `🛡️ **Figurehead** — **${fhLabel || 'Murne Rin'}** suffers **1 Damage** to prevent **1** of **${targetDcName}**'s Strain (${amount} → ${remaining}).`,
       { phase: 'ROUND', icon: 'card' },
     );
-    // Murne suffers 1 Strain. Guard against Figurehead re-triggering on Murne's
-    // own strain (_noFigurehead) so a lone Murne cannot shield herself.
-    await applyStrain(game, ctx, {
-      figureKey: fhFigKey,
-      controllerPlayerNum: defenderPN,
-      amount: 1,
-      source: 'Figurehead',
-      _noFigurehead: true,
-    });
+    // Murne suffers 1 DAMAGE, not Strain. alexanbv 2026-09-02: "Murne suffers
+    // damage to prevent strain." The card prints three glyphs and the middle
+    // one is the outline star: "Before a friendly figure within 4 spaces
+    // suffers [Strain], you may suffer 1 [Damage] to prevent 1 of that
+    // [Strain]." His 2026-06-19 ruling settled the TRIGGER (strain only, which
+    // the spec row and this handler already followed) and the cost had been
+    // assumed to follow it.
+    //
+    // It is not a cosmetic swap: Strain-for-Strain was close to a no-op
+    // transfer between two friendly figures, where Damage is the resource that
+    // can actually defeat her. Routed through the damage pipeline so
+    // when-suffers-damage / before-defeated hooks fire, exactly as the strain →
+    // damage path does.
+    await _applyFigureheadDamage(game, ctx, { figureKey: fhFigKey, controllerPlayerNum: defenderPN });
     saveGames?.(game.gameId);
     // Resume the original figure's strain with the reduced amount. _noFigurehead
     // prevents another Figurehead prompt on the same event (only 1 prevention).

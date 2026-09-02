@@ -12,9 +12,10 @@
  * the card and alexanbv's own 2026-06-19 ruling ("Figurehead is for STRAIN not
  * damage") that the spec row and the strain pipeline already follow. Fixed.
  *
- * The COST is left alone pending a ruling: the card says suffer 1 Damage, the
- * handler charges 1 Strain. That is not a cosmetic difference — Strain-for-
- * Strain is close to a no-op transfer, while Damage is what actually kills her.
+ * The COST was raised with alexanbv and ruled the same day: "Murne suffers
+ * damage to prevent strain." So the handler now charges 1 Damage through the
+ * damage pipeline. Not a cosmetic swap — Strain-for-Strain was close to a
+ * no-op transfer between two friendly figures, where Damage can defeat her.
  */
 import { test, describe } from 'node:test';
 import assert from 'node:assert';
@@ -45,7 +46,9 @@ describe('Murne Rin — Figurehead triggers on Strain only', () => {
   test('the spec row already carried the ruling, and still does', () => {
     const row = (abilitiesForCard('Murne Rin') || []).find((r) => r.ability === 'Figurehead');
     assert.equal(row.timing, 'when_suffers_strain');
-    assert.match(row.notes, /STRAIN ONLY — no damage \(alexanbv 2026-06-19/);
+    assert.match(row.notes, /Trigger is STRAIN ONLY \(alexanbv 2026-06-19/);
+    assert.match(row.notes, /the COST is 1 DAMAGE \(alexanbv 2026-09-02/);
+    assert.match(row.pipelines, /strain;damage/, 'both resources are involved now');
   });
 
   test('the trigger really is wired into the strain pipeline, not the damage one', () => {
@@ -53,13 +56,30 @@ describe('Murne Rin — Figurehead triggers on Strain only', () => {
     assert.match(src, /export async function handleFigureheadStrainDecision/);
   });
 
-  test('OPEN: the handler charges Strain where the card prints Damage', () => {
-    // Pinned deliberately as the CURRENT behaviour, not as the correct one, so
-    // that when alexanbv rules the change is a visible edit rather than a
-    // silent drift. See the docstring.
+  test('RULED: the cost is 1 DAMAGE', () => {
+    // alexanbv 2026-09-02: "Murne suffers damage to prevent strain."
     const src = readFileSync(resolve(root, 'src/handlers/strain-handler.js'), 'utf8');
-    assert.match(src, /suffers \*\*1 Strain\*\* to prevent \*\*1\*\* of/,
-      'if this fails, the cost was changed — update the docstring and this test together');
+    assert.match(src, /suffers \*\*1 Damage\*\* to prevent \*\*1\*\* of/);
+    assert.ok(!/suffers \*\*1 Strain\*\* to prevent/.test(src), 'the old Strain cost is gone');
+    assert.match(src, /_applyFigureheadDamage\(game, ctx, \{ figureKey: fhFigKey/,
+      'and it routes through the damage pipeline, not applyStrain');
+  });
+
+  test('the cost runs through the damage pipeline so defeat hooks fire', () => {
+    // Murne can now actually die paying for this, so the pipeline matters.
+    const src = readFileSync(resolve(root, 'src/handlers/strain-handler.js'), 'utf8');
+    const helper = src.slice(src.indexOf('async function _applyFigureheadDamage'));
+    assert.match(helper.slice(0, 1400), /const \{ applyDamage \} = await import\('\.\.\/game\/damage-pipeline\.js'\);/);
+    assert.match(helper.slice(0, 1400), /wasDefeated && processFigureDefeat/);
+    assert.ok(!/viaStrain/.test(helper.slice(0, 1400)),
+      'this is printed Damage, not Damage converted from Strain');
+  });
+
+  test('both player-facing labels say Damage', () => {
+    const sh = readFileSync(resolve(root, 'src/handlers/strain-handler.js'), 'utf8');
+    const aa = readFileSync(resolve(root, 'src/engine/available-actions.js'), 'utf8');
+    assert.match(sh, /Use Figurehead \(Murne suffers 1 Damage → prevent 1 Strain\)/);
+    assert.match(aa, /Use Figurehead \(Murne suffers 1 Damage to prevent 1 Strain\)/);
   });
 
   test('the rest of Murne matches', () => {
