@@ -17,6 +17,11 @@ export const FRONT_LINE_ABILITY_ID = 'front_line';
 // combat-spec.csv row 230); the Regular (row 232) only gets the blue→red swap.
 // Both variants share 'front_line' (the swap), so the Elite carries this extra
 // id to gate the accuracy bonus. (alexanbv: CSV is source of truth.)
+//
+// CONFIRMED alexanbv 2026-09-02: "The other +2 acc is part of the frontline
+// ability and only triggered when the target is in range." The card PRINTS that
+// +2 Accuracy in the innate band next to Efficient Travel, which reads as an
+// unconditional innate — it is not. Do not "correct" it out of the range gate.
 export const FRONT_LINE_ACCURACY_ABILITY_ID = 'front_line_accuracy';
 export const FRONT_LINE_MAX_DISTANCE = 3;
 
