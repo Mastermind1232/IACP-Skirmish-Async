@@ -3701,7 +3701,7 @@
       ],
       "surgeAbilities": [
         "focus",
-        "surge 1",
+        "damage 1",
         "accuracy 2"
       ],
       "attachment": false,
