@@ -3458,7 +3458,7 @@
       ]
     },
     "HK-47": {
-      "abilityText": "Query: When you declare an attack, apply +1 Damage to the attack results unless the defender becomes Bleeding.\n\nConclusion: While attacking, apply -1 Evade to the defense results.\n\nMockery: Once during your activation, you may choose a hostile figure in your line of sight. That figure suffers 1 Strain.",
+      "abilityText": "Query: When you declare an attack, apply +1 Damage to the attack results unless the defender becomes Bleeding.\n\nConclusion: While attacking, apply -1 Dodge to the defense results.\n\nMockery: Once during your activation, you may choose a hostile figure in your line of sight. That figure suffers 1 Strain.",
       "keywords": [
         "DROID",
         "HUNTER"
