@@ -4717,7 +4717,7 @@
         "white"
       ],
       "surgeAbilities": [
-        "pierce 2",
+        "damage 1",
         "critical_hit"
       ],
       "specialAbilityIds": [

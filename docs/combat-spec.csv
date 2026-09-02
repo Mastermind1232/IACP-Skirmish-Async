@@ -1271,7 +1271,7 @@ Luke Skywalker,DC,Surge: Recover 2,1,spend_surges,attacker,prompt,TRUE,None,None
 Luke Skywalker,DC,Surge: +2 Accuracy,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +2 Accuracy,None,surge ability
 Luke Skywalker (Jedi Knight),DC,Surge: +1 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +1 Damage,None,surge ability
 Luke Skywalker (Jedi Knight),DC,Surge: Pierce 3,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: Pierce 3,None,surge ability
-Mak Eshka'rey,DC,Surge: Pierce 2,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: Pierce 2,None,surge ability
+Mak Eshka'rey,DC,Surge: +1 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +1 Damage,None,surge ability
 Mara Jade,DC,Surge: +2 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +2 Damage,None,surge ability
 Mara Jade,DC,Surge: Pierce 3,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: Pierce 3,None,surge ability
 Maul,DC,Surge: Pierce 3,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: Pierce 3,None,surge ability
