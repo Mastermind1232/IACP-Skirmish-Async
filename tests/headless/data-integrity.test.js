@@ -70,9 +70,26 @@ describe('DC: All cards have required fields', () => {
     assert.strictEqual(missing.length, 0, `DCs missing attack dice: ${missing.map(m => m[0])}`);
   });
 
+  // Fully-statted figures whose card prints a DASH in the Defense circle, not a
+  // die. Distinct from KNOWN_COMPANIONS, which have no combat stats at all.
+  // These must carry `defense: []` rather than omit the key: combat.js:3845
+  // normalises a MISSING defense to ['white'], so dropping the field would hand
+  // the figure a free white die, while an empty array passes through untouched.
+  const PRINTS_NO_DEFENSE_DIE = ['Kuiil'];
+
   it('every non-attachment non-companion DC has defense dice', () => {
-    const missing = allDCs.filter(([k, v]) => !v.attachment && !v.defense?.length && !k.startsWith('[') && !KNOWN_COMPANIONS.includes(k));
+    const missing = allDCs.filter(([k, v]) => !v.attachment && !v.defense?.length && !k.startsWith('[')
+      && !KNOWN_COMPANIONS.includes(k) && !PRINTS_NO_DEFENSE_DIE.includes(k));
     assert.strictEqual(missing.length, 0, `DCs missing defense: ${missing.map(m => m[0])}`);
+  });
+
+  it('a dash-defence figure carries an empty array, not a missing field', () => {
+    for (const k of PRINTS_NO_DEFENSE_DIE) {
+      const v = eff[k];
+      assert.ok(v, `${k} exists`);
+      assert.ok(Array.isArray(v.defense), `${k} must have defense: [] — a missing field becomes ['white']`);
+      assert.strictEqual(v.defense.length, 0);
+    }
   });
 
   it('every non-attachment non-companion DC has cost', () => {

@@ -4298,12 +4298,11 @@
         "arms_distribution_kotun"
       ],
       "abilities": [
-        "Professional",
-        "+3 Accuracy"
+        "Professional"
       ]
     },
     "Krrsantan": {
-      "abilityText": "Full of Rage: Before you declare an attack, if you have suffered 3 or more Damage, become Focused.\n\nElectrified Knuckledusters: Choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Damage results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.",
+      "abilityText": "Full of Rage: Before you declare an attack, if you have suffered 3 or more Damage, become Focused.\n\nElectrified Knuckledusters: Once during your activation, choose an adjacent hostile figure and roll 1 blue die. That figure suffers Damage equal to the Damage results. Then, if you rolled 1 or more Surge results, that figure becomes Stunned.",
       "keywords": [
         "WOOKIEE",
         "BRAWLER",
@@ -4364,9 +4363,7 @@
         ],
         "type": "range"
       },
-      "defense": [
-        "white"
-      ],
+      "defense": [],
       "surgeAbilities": [
         "accuracy 2",
         "damage 2",
@@ -5942,8 +5939,7 @@
       "elite": true,
       "affiliation": "Imperial",
       "abilities": [
-        "Professional",
-        "+3 Accuracy"
+        "Professional"
       ]
     },
     "Second Sister": {
