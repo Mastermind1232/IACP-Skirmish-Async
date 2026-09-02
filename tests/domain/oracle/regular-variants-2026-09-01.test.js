@@ -128,20 +128,54 @@ describe('the Regular abilities actually register', () => {
   });
 });
 
-describe('innate negatives are readable', () => {
-  // Until 2026-09-01 the passive parser matched a literal "+" only, so a
-  // printed penalty was silently ignored.
-  const src = readFileSync(resolve(root, 'src/handlers/combat.js'), 'utf8');
+describe('innate negatives are READ, not just parsed', () => {
+  // alexanbv 2026-09-01: "confirm negative modifiers are implemented and read
+  // correctly". Asserting on the source regex is not that — this exercises the
+  // real applyDcPassivesToCombat and the real damage arithmetic.
+  test('a negative damage innate produces a negative bonus', async () => {
+    const { applyDcPassivesToCombat } = await import('../../../src/handlers/combat.js');
+    const run = (passives) => { const c = {}; applyDcPassivesToCombat(c, passives, [], {}); return c; };
 
-  test('the damage innate accepts a sign', () => {
-    assert.match(src, /const dmg\s*=\s*p\.match\(\/\^\(\[\+-\]\)/, 'damage innate must accept + or -');
+    assert.equal(run(['+2 Damage']).bonusHits, 2, 'positive still works');
+    assert.equal(run(['-1 Damage']).bonusHits, -1, 'the penalty is read');
+    assert.equal(run(['+2 Damage', '-1 Damage']).bonusHits, 1, 'they sum');
+    assert.equal(run(['-2 Accuracy']).bonusAccuracy, -2, 'accuracy too');
+    assert.equal(run(['-1 Hit']).bonusHits, -1, 'and the hit spelling');
   });
-  test('the hit and accuracy innates accept a sign too', () => {
-    assert.match(src, /const hit\s*=\s*p\.match\(\/\^\(\[\+-\]\)/);
-    assert.match(src, /const acc\s*=\s*p\.match\(\/\^\(\[\+-\]\)/);
+
+  test("Gamorrean Regular's printed innate reaches the combat object", async () => {
+    const { applyDcPassivesToCombat } = await import('../../../src/handlers/combat.js');
+    const { readFileSync: rf } = await import('node:fs');
+    const card = JSON.parse(rf(resolve(root, 'data/dc-effects.json'), 'utf8')).cards['Gamorrean Guard (Regular)'];
+    const combat = {};
+    applyDcPassivesToCombat(combat, [...(card.abilities || []), ...(card.passives || [])], [], {});
+    assert.equal(combat.bonusHits, -1, 'the card as shipped yields -1, not 0 and not +1');
   });
-  test('no innate pattern is still anchored to a bare plus', () => {
-    assert.ok(!/p\.match\(\/\^\\\+\(\\d\+\)\\s\+damage\$\//.test(src),
-      'the old plus-only damage pattern must be gone');
+
+  test('a negative bonus actually reduces damage, and cannot drive it below zero', () => {
+    // Mirrors src/game/combat.js: Math.max(0, dmg + surge + bonusHits - block).
+    const dealt = (rollDmg, bonusHits, block = 0) => Math.max(0, rollDmg + 0 + bonusHits - block);
+    assert.equal(dealt(4, -1), 3, 'the penalty comes off the total');
+    assert.equal(dealt(4, +1), 5, 'a bonus still adds');
+    assert.equal(dealt(1, -3), 0, 'clamped at zero — damage never goes negative');
+  });
+
+  test('the combat log signs the number instead of printing "+-1"', () => {
+    const src = readFileSync(resolve(root, 'src/game/combat.js'), 'utf8');
+    assert.match(src, /const _signed = \(n\) =>/, 'a sign helper exists');
+    assert.ok(!/bonus: \+\$\{\(bonusHits/.test(src), 'the hardcoded plus is gone');
+    assert.match(src, /_signed\(\(bonusHits \|\| 0\) \+ perDefDieDamage\)\} Damage/,
+      'and it reads "Damage", per the vocabulary ruling');
+  });
+
+  test('the CSV slug keeps +N and -N apart', async () => {
+    // Both collided on "1_damage", so the second registered was dropped as
+    // already-covered and a penalty inherited a bonus's identity.
+    const { registerCsvCombatAbilities } = await import('../../../src/engine/combat-abilities-from-csv.js');
+    const { timingIndicatorsForWindow } = await import('../../../src/engine/combat-timing-registry.js');
+    registerCsvCombatAbilities();
+    const ids = timingIndicatorsForWindow('mods').filter((e) => /damage/i.test(e.name)).map((e) => e.id);
+    assert.ok(ids.some((i) => /plus_1_damage/.test(i)), '+1 Damage keeps its own id');
+    assert.ok(ids.some((i) => /minus_1_damage/.test(i)), '-1 Damage keeps its own id');
   });
 });

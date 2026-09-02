@@ -574,8 +574,12 @@ export function computeCombatResult(combat) {
   }
   // Details on a separate line so the headline reads at a glance.
   let details = `Attack: ${roll.acc} acc, ${roll.dmg} dmg, ${roll.surge} surge | Defense: ${defRoll.block} block, ${defRoll.evade} evade`;
-  if (bonusAcc) details += ` | bonus: +${bonusAcc} acc`;
-  if (bonusHits || perDefDieDamage) details += ` | bonus: +${(bonusHits || 0) + perDefDieDamage} Hit`;
+  // Sign the numbers rather than hardcoding "+": a negative innate (Gamorrean
+  // Guard (Regular)'s -1 Damage) would otherwise print as "+-1". Also "Damage",
+  // not "Hit", per the 2026-08-31 vocabulary ruling.
+  const _signed = (n) => `${n > 0 ? '+' : ''}${n}`;
+  if (bonusAcc) details += ` | bonus: ${_signed(bonusAcc)} acc`;
+  if (bonusHits || perDefDieDamage) details += ` | bonus: ${_signed((bonusHits || 0) + perDefDieDamage)} Damage`;
   if (bonusBlock && !combat.ignoreDefenseResultsNotOnDice) {
     if ((combat.bonusBlockSources || []).length) {
       for (const _bbs of combat.bonusBlockSources) {

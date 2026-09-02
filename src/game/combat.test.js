@@ -107,7 +107,31 @@ test('computeCombatResult bonusHits (Beatdown)', () => {
   });
   assert.strictEqual(r.hit, true);
   assert.strictEqual(r.damage, 1); // 2 dmg + 1 bonus - 2 block = 1
-  assert.ok(r.resultText.includes('bonus: +1 Hit'));
+  // "Damage", not "Hit", per the 2026-08-31 vocabulary ruling.
+  assert.ok(r.resultText.includes('bonus: +1 Damage'), r.resultText);
+});
+
+test('computeCombatResult a NEGATIVE bonusHits (Gamorrean Guard Regular)', () => {
+  // The first card in the database with a printed innate penalty. The log must
+  // read "-1", not "+-1", and the penalty must come off the damage.
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 3, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    bonusHits: -1,
+  });
+  assert.strictEqual(r.hit, true);
+  assert.strictEqual(r.damage, 2, '3 dmg - 1 penalty = 2');
+  assert.ok(r.resultText.includes('bonus: -1 Damage'), r.resultText);
+  assert.ok(!r.resultText.includes('+-'), 'never renders a doubled sign');
+});
+
+test('computeCombatResult a penalty cannot drive damage below zero', () => {
+  const r = computeCombatResult({
+    attackRoll: { acc: 2, dmg: 1, surge: 0 },
+    defenseRoll: { block: 0, evade: 0 },
+    bonusHits: -3,
+  });
+  assert.strictEqual(r.damage, 0, 'clamped at zero');
 });
 
 test('computeCombatResult bonusBlock (Brace Yourself)', () => {

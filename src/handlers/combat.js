@@ -6012,7 +6012,11 @@ const isWithinSpaces = _isWithinSpaces;
  * Combined entries (e.g. "+1 Damage, +1 Accuracy, +1 Block") split by comma —
  * each part is applied to whichever role is relevant.
  */
-function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives, dcNames = {}) {
+// Exported for test: innate modifiers (including NEGATIVE ones) are applied
+// here, and asserting on the source text is not the same as asserting on the
+// arithmetic. alexanbv 2026-09-01 asked for confirmation that negatives are
+// read correctly, which needs the real function, not a regex re-implementation.
+export function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives, dcNames = {}) {
   const { defenderDcName = '' } = dcNames;
   const parts = (str) => str.split(',').map((s) => s.trim().toLowerCase());
 
