@@ -3815,7 +3815,7 @@
       ]
     },
     "Jabba the Hutt": {
-      "abilityText": "Special Action (Bully): A figure of your choice within 3 spaces suffers 3 Damage.\n\nSpecial Action (Incentivize): An elite figure of your choice becomes Focused.\n\nSpecial Action (Scheme): Draw 1 Command card.\n\nDouble Action Special (Order Hit): Spend 2 VPs. An elite figure of your choice may interrupt to perform an attack. Then, it gains 2 movement points.\n\nNefarious Gains: When a hostile figure is defeated, gain 1 VP.",
+      "abilityText": "Special Action (Bully): A figure of your choice within 3 spaces suffers 3 Strain.\n\nSpecial Action (Incentivize): A SCUM figure of your choice becomes Focused.\n\nSpecial Action (Scheme): Draw 1 Command card.\n\nDouble Action Special (Order Hit): Spend 2 VPs. A SCUM figure of your choice may interrupt to perform an attack. Then, it gains 2 movement points.\n\nNefarious Gains: When a hostile figure is defeated, gain 1 VP.",
       "keywords": [
         "LEADER",
         "SMUGGLER",

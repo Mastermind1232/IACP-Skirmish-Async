@@ -87,8 +87,15 @@ describe('MEDFIX Bully (Jabba): allowFriendly lets a friendly within 3 be chosen
 });
 
 // ── Bug 5: Incentivize (Jabba) — no affiliation condition ───────────────────────
-describe('MEDFIX Incentivize (Jabba): a non-Scum elite is selectable', () => {
-  it('Agent Blaise (Imperial elite) is enumerated despite not being Scum', async () => {
+// REVERSED 2026-09-02. This suite's June fix removed Incentivize's affiliation
+// filter on the strength of combat-spec.csv's prose column ("an elite figure of
+// your choice"). That was the wrong column: the same CSV row's affects_others
+// column reads "a SCUM figure of your choice", and the card prints the Scum
+// glyph. alexanbv 2026-09-02: "Jabba can only target SCUM figures. He can never
+// target imperial figures. Elite is irrelevant." The filter is back, on
+// affiliation rather than on elite. See jabba-scum-targeting.test.js.
+describe('MEDFIX Incentivize (Jabba): only SCUM figures are selectable', () => {
+  it('Agent Blaise (Imperial elite) is NOT enumerated; a Scum figure is', async () => {
     const { getDcEffects } = await import('../../../src/data-loader.js');
     const dcMessageMeta = new Map();
     const jabbaMsgId = 'msg_jabba';
@@ -110,9 +117,9 @@ describe('MEDFIX Incentivize (Jabba): a non-Scum elite is selectable', () => {
     const result = resolveAbility('incentivize_jabba', context);
     assert.strictEqual(result.applied, false);
     assert.strictEqual(result.requiresChoice, true);
-    assert.ok(result.targetFigureKeys.includes('Agent Blaise-1-0'),
-      'non-Scum (Imperial) elite enumerated — affiliation filter removed');
+    assert.ok(!result.targetFigureKeys.includes('Agent Blaise-1-0'),
+      'an Imperial figure is never a legal Incentivize target, elite or not');
     assert.ok(result.targetFigureKeys.includes('4-LOM-1-0'),
-      'Scum elite still enumerated');
+      'the Scum figure is enumerated');
   });
 });

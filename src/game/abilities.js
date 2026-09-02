@@ -1896,7 +1896,7 @@ export function resolveAbility(abilityId, context) {
     return { applied: true, logMessage: '**Scheme** — No cards left in CC deck.' };
   }
 
-  // incentivize_jabba (Jabba the Hutt): choose any elite figure → Focus
+  // incentivize_jabba (Jabba the Hutt): choose any SCUM figure → Focus
   if (abilityId === 'incentivize_jabba') {
     const { game, playerNum, meta, msgId, choiceIndex, targetFigureKey, getDcEffects: getEff } = context;
     if (!game || !playerNum) return { applied: false, manualMessage: 'Resolve **Incentivize** manually.' };
@@ -1905,7 +1905,7 @@ export function resolveAbility(abilityId, context) {
       const chosenName = dcNameFromFigureKey(targetFigureKey);
       return { applied: true, logMessage: `**Incentivize** — **${chosenName}** is now **Focused**.`, refreshDcEmbed: true };
     }
-    // Enumerate all elite figures on the board (both players)
+    // Enumerate all SCUM figures on the board (both players)
     const dcEffects = typeof getEff === 'function' ? getEff() : null;
     const enemyNum = opponentPlayerNum(playerNum);
     const validTargets = [];
@@ -1914,13 +1914,20 @@ export function resolveAbility(abilityId, context) {
         if (!pos) continue;
         const fkDcName = dcNameFromFigureKey(fk);
         const fkEff = dcEffects?.[fkDcName];
-        if (!fkEff?.elite) continue;
-        // CSV row 303 "an elite figure of your choice" has NO affiliation
-        // condition — any elite figure (either player) is eligible.
+        // SCUM only. alexanbv 2026-09-02: "Jabba can only target SCUM figures.
+        // He can never target imperial figures. Elite is irrelevant."
+        //
+        // This filtered on `elite` because the CSV's prose column reads "an
+        // elite figure of your choice" — but that same CSV row's affects_others
+        // column reads "a SCUM figure of your choice", and the card prints the
+        // Mercenary glyph. The prose was the wrong half to follow: as written,
+        // Jabba could Incentivize an elite IMPERIAL figure but not a regular
+        // Scum one.
+        if ((fkEff?.affiliation || '') !== 'Scum') continue;
         validTargets.push(fk);
       }
     }
-    if (validTargets.length === 0) return { applied: false, manualMessage: '**Incentivize** — No elite figures on the board.' };
+    if (validTargets.length === 0) return { applied: false, manualMessage: '**Incentivize** — No SCUM figures on the board.' };
     return {
       applied: false,
       requiresChoice: true,
