@@ -2889,6 +2889,39 @@
         "Block 1"
       ]
     },
+    "Gamorrean Guard (Regular)": {
+      "abilityText": "Gamorrean Honor: While defending during a Ranged attack, you may reroll 1 defense die.\n\nLabored Attack: While attacking, you may suffer 1 Strain to reroll 1 attack die.",
+      "keywords": [
+        "BRAWLER",
+        "GUARDIAN"
+      ],
+      "cost": 6,
+      "subCost": 3,
+      "health": 5,
+      "speed": 4,
+      "passives": [
+        "Reach"
+      ],
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "red",
+          "red"
+        ],
+        "type": "melee"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "cleave 1"
+      ],
+      "attachment": false,
+      "affiliation": "Scum",
+      "abilities": [
+        "-1 Damage"
+      ]
+    },
     "Gamorrean Guard (Elite)": {
       "abilityText": "Gamorrean Honor Guard: While defending during a Ranged attack, apply +1 Block to the defense results.\n\nProfessional: While attacking, you may reroll 1 attack die.",
       "keywords": [
@@ -3344,6 +3377,39 @@
       ],
       "attachment": false,
       "affiliation": "Scum"
+    },
+    "HK Assassin Droid (Regular)": {
+      "abilityText": "Versatile Weaponry: While attacking, you may force the defender to reroll 1 defense die.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.",
+      "keywords": [
+        "DROID",
+        "HUNTER"
+      ],
+      "cost": 8,
+      "subCost": 4,
+      "health": 5,
+      "speed": 4,
+      "figures": 2,
+      "attack": {
+        "dice": [
+          "blue",
+          "blue",
+          "yellow"
+        ],
+        "type": "range"
+      },
+      "defense": [
+        "black"
+      ],
+      "surgeAbilities": [
+        "weaken",
+        "damage 1",
+        "pierce 1"
+      ],
+      "attachment": false,
+      "affiliation": "Scum",
+      "specialAbilityIds": [
+        "targeting_computer_hk_reg"
+      ]
     },
     "HK Assassin Droid (Elite)": {
       "abilityText": "Targeting Computer: While attacking, you may reroll 1 attack die.\n\nVersatile Weaponry: While attacking, you may force the defender to reroll 1 defense die.\n\nMerciless: When you declare an attack, if the defender has any HARMFUL conditions, it suffers 1 Damage.",

@@ -30,7 +30,15 @@ for (const [gate, specs] of Object.entries(GATE_TO_SPEC_WINDOW)) {
 }
 
 function slug(s) {
-  return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  // Preserve a LEADING SIGN. Stripping it made "+1 Damage" and "-1 Damage"
+  // collide on `1_damage`, so the second one registered was silently dropped as
+  // already-covered — a printed penalty quietly inheriting a bonus's identity.
+  // Surfaced 2026-09-01 by Gamorrean Guard (Regular), the first card in the
+  // database with a negative innate.
+  const sign = /^\s*([+-])/.exec(String(s));
+  const body = String(s).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  if (!sign) return body;
+  return `${sign[1] === '-' ? 'minus' : 'plus'}_${body}`;
 }
 
 /** name+window+side keys already covered by an existing registry entry. */

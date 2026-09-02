@@ -25,6 +25,7 @@ import {
 
 const EXPECTED_IDS = [
   'targeting_computer_hk_elite',
+  'targeting_computer_hk_reg',
   'targeting_computer_ig11',
   'targeting_computer_probe_elite',
   'targeting_computer_sentry_elite',
@@ -44,7 +45,7 @@ const EXPECTED_DCS = [
 ];
 
 describe('PROBE-TC-001: constants', () => {
-  it('id set is frozen and covers all 7 members', () => {
+  it('id set is frozen and covers all 8 members', () => {
     assert.deepStrictEqual([...TARGETING_COMPUTER_ABILITY_IDS].sort(), [...EXPECTED_IDS].sort());
     assert.ok(Object.isFrozen(TARGETING_COMPUTER_ABILITY_IDS));
   });

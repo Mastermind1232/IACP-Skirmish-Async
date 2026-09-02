@@ -1441,3 +1441,13 @@ Zuckuss,DC,Surge: +2 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,T
 Zuckuss,DC,Surge: Pierce 2,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: Pierce 2,None,surge ability
 Paz Vizsla,DC,Surge: gain 1 Block token,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: gain 1 Block token,None,surge ability
 Paz Vizsla,DC,Surge: +1 Accuracy,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +1 Accuracy,None,surge ability
+Gamorrean Guard (Regular),DC,Reach,1,attack:on_declare,attacker,automatic,TRUE,None,None,None,FALSE,Reach: your melee attacks may target a figure up to 2 spaces away,None,passive keyword
+Gamorrean Guard (Regular),DC,-1 Damage,1,attack:modifiers,attacker,automatic,TRUE,None,None,None,FALSE,Apply -1 Damage to the attack results,None,innate penalty
+Gamorrean Guard (Regular),DC,Gamorrean Honor,1,attack:rerolls,defender,prompt,TRUE,None,defending during a Ranged attack,None,FALSE,"While defending during a Ranged attack, you may reroll 1 defense die",reroll,None
+Gamorrean Guard (Regular),DC,Labored Attack,1,attack:rerolls,attacker,prompt,TRUE,None,None,None,FALSE,"While attacking, you may suffer 1 Strain to reroll 1 attack die",strain;reroll,None
+Gamorrean Guard (Regular),DC,Surge: Cleave 1,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: Cleave 1 (applies after the attack resolves),damage,surge ability
+HK Assassin Droid (Regular),DC,Targeting Computer,1,attack:rerolls,attacker,prompt,TRUE,None,None,None,FALSE,"While attacking, you may reroll 1 attack die",reroll,None
+HK Assassin Droid (Regular),DC,Versatile Weaponry,1,attack:rerolls,attacker,prompt,FALSE,the defender,None,None,FALSE,"While attacking, you may force the defender to reroll 1 defense die",reroll,None
+HK Assassin Droid (Regular),DC,Surge: the target becomes Weakened,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: the target becomes Weakened (applies after the attack resolves),condition,surge ability
+HK Assassin Droid (Regular),DC,Surge: +1 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +1 Damage,None,surge ability
+HK Assassin Droid (Regular),DC,Surge: Pierce 1,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: Pierce 1,None,surge ability

@@ -6,7 +6,7 @@
       "cc": "effect"
     },
     "counts": {
-      "dc": 239,
+      "dc": 241,
       "cc": 292
     }
   },
@@ -74,12 +74,14 @@
     "Fifth Brother": "Vigor: At the start of your activation, you may gain 2 movement points or 1 Block Token.\n\nRelentless Pursuit: When you declare an attack, the target suffers 1 Strain.\n\nSpecial Action (Sith Acolyte): Search your Command deck for a card with the FORCE USER or BRAWLER trait that costs 2 or less, reveal it, and put it into your hand. Then, shuffle your Command deck.",
     "Gaarkhan": "Brutal Cleave: After you resolve an attack during your activation, you may suffer 1 Strain to perform an attack using 1 red and 1 yellow die targeting a different figure or object. Limit once per activation.\n\nSpecial Action (Charge): Move a number of spaces up to your Speed. Then, you may perform an attack.",
     "Gamorrean Guard (Elite)": "Gamorrean Honor Guard: While defending during a Ranged attack, apply +1 Block to the defense results.\n\nProfessional: While attacking, you may reroll 1 attack die.",
+    "Gamorrean Guard (Regular)": "Gamorrean Honor: While defending during a Ranged attack, you may reroll 1 defense die.\n\nLabored Attack: While attacking, you may suffer 1 Strain to reroll 1 attack die.",
     "Gar Saxon": "Airborne Commander: Friendly Mobile figures within 4 spaces can use your surge abilities.\n\nPersonal Combat Shield: Whenever you spend a Block while defending, apply +1 Evade to the defense results.\n\nSpecial Action (Gar Saxon's Flamethrower): Choose a space within 2 spaces. Each other figure on or adjacent to that space suffers 1 Damage and 1 Strain and discards 1 Power Token.",
     "General Sorin": "Special Action (Bombardment): Choose an adjacent friendly figure. That figure may interrupt to perform an attack. The attack gains Blast 1.\n\nAdvanced Firepower: Adjacent friendly DROIDS and VEHICLES can use your surge abilities.",
     "General Weiss": "General's Orders: At the start of your activation choose up to 2 other friendly figures on the map. Those figures may each interrupt to perform a move.\n\nEpic Arsenal: Your attack pool consists of any combination of 3 attack dice. You cannot roll more than 2 dice of a single color.",
     "Gideon Argus": "Special Action (Tactical Maneuver): Choose another friendly figure in your line of sight. That figure gains 2 movement points.\n\nSpecial Action (On My Mark): Choose another friendly figure in your line of sight. That figure becomes Focused.",
     "Greedo": "Slow on the Draw: When you declare an attack, the defender may interrupt to perform an attack targeting you.\n\nParting Shot: When you have suffered Damage equal to your Health, before you are defeated, you may interrupt to perform an attack. Then, you are defeated.",
     "HK Assassin Droid (Elite)": "Targeting Computer: While attacking, you may reroll 1 attack die.\n\nVersatile Weaponry: While attacking, you may force the defender to reroll 1 defense die.\n\nMerciless: When you declare an attack, if the defender has any HARMFUL conditions, it suffers 1 Damage.",
+    "HK Assassin Droid (Regular)": "Versatile Weaponry: While attacking, you may force the defender to reroll 1 defense die.\n\nTargeting Computer: While attacking, you may reroll 1 attack die.",
     "HK-47": "Query: When you declare an attack, apply +1 Damage to the attack results unless the defender becomes Bleeding.\n\nConclusion: While attacking, apply -1 Evade to the defense results.\n\nMockery: Once during your activation, you may choose a hostile figure in your line of sight. That figure suffers 1 Strain.",
     "Han Solo": "Return Fire: After an attack targeting you is resolved, if you did not suffer any Damage, you may interrupt to perform an attack targeting that attacker. Limit once per round.\n\nDistracting: While a friendly figure is defending, and you are adjacent to the targeted space, apply +1 Evade to the defense results.\n\nCunning: While defending, apply +1 Block to the defense results for each Evade result.",
     "Heavy Stormtrooper (Elite)": "Modular: You may include an attachment card in your army and decrease its cost by 1, to a minimum of 0. During setup, you must attach that card to this group.\n\nSpray Fire: While attacking, you may apply -3 Accuracy and +1 Surge to the attack results.",

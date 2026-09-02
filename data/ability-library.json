@@ -5042,6 +5042,15 @@
       "description": "While attacking, you may reroll 1 attack die.",
       "wiredStatus": "wired"
     },
+    "targeting_computer_hk_reg": {
+      "type": "dcSpecial",
+      "category": "passive-reactive",
+      "trigger": "combat-dice",
+      "label": "Targeting Computer",
+      "description": "While attacking, you may reroll 1 attack die.",
+      "oncePer": null,
+      "wiredStatus": "wired"
+    },
     "targeting_computer_hk_elite": {
       "type": "dcSpecial",
       "category": "passive-reactive",

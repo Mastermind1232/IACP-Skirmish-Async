@@ -6018,12 +6018,23 @@ function applyDcPassivesToCombat(combat, attackerPassives, defenderPassives, dcN
 
   for (const passive of (attackerPassives || [])) {
     for (const p of parts(passive)) {
-      const hit  = p.match(/^\+(\d+)\s+hit(s?)$/);   if (hit)    { combat.bonusHits      = (combat.bonusHits      || 0) + parseInt(hit[1],    10); continue; }
+      // Innates may be NEGATIVE. Gamorrean Guard (Regular) prints "-1 Damage",
+      // and until 2026-09-01 these patterns matched a literal "+" only, so a
+      // printed penalty was read by nothing and the figure quietly hit harder
+      // than its card (alexanbv: "you need to be able to read innate negatives").
+      // `sign` captures + or -, so one branch handles both directions.
+      const hit  = p.match(/^([+-])(\d+)\s+hit(s?)$/);
+      if (hit)  { const _n = parseInt(hit[2], 10) * (hit[1] === '-' ? -1 : 1);
+                  combat.bonusHits     = (combat.bonusHits     || 0) + _n; continue; }
       // "+N Damage" passive (Tusken Raider Elite, etc.) — IACP treats
       // this as a static result-side hit bonus. Wired identically to
       // "+N hit" per alexanbv 2026-05-11 verification.
-      const dmg  = p.match(/^\+(\d+)\s+damage$/);     if (dmg)    { combat.bonusHits      = (combat.bonusHits      || 0) + parseInt(dmg[1],    10); continue; }
-      const acc  = p.match(/^\+(\d+)\s+accur/);       if (acc)    { combat.bonusAccuracy  = (combat.bonusAccuracy  || 0) + parseInt(acc[1],    10); continue; }
+      const dmg  = p.match(/^([+-])(\d+)\s+damage$/);
+      if (dmg)  { const _n = parseInt(dmg[2], 10) * (dmg[1] === '-' ? -1 : 1);
+                  combat.bonusHits     = (combat.bonusHits     || 0) + _n; continue; }
+      const acc  = p.match(/^([+-])(\d+)\s+accur/);
+      if (acc)  { const _n = parseInt(acc[2], 10) * (acc[1] === '-' ? -1 : 1);
+                  combat.bonusAccuracy = (combat.bonusAccuracy || 0) + _n; continue; }
       const pier = p.match(/^pierce\s+(\d+)$/i);      if (pier)   { combat.bonusPierce    = (combat.bonusPierce    || 0) + parseInt(pier[1],   10); continue; }
       const surg = p.match(/^\+(\d+)\s+surge$/);      if (surg)   { combat.surgeBonus     = (combat.surgeBonus     || 0) + parseInt(surg[1],   10); continue; }
       const blas = p.match(/^blast\s+(\d+)$/);        if (blas)   { combat.bonusBlast     = (combat.bonusBlast     || 0) + parseInt(blas[1],   10); continue; }
