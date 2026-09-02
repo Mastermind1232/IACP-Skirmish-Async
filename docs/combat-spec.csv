@@ -1339,6 +1339,7 @@ Saska Teft,DC,"Surge: +1 Damage, Pierce 1",1,spend_surges,attacker,prompt,TRUE,N
 Saska Teft,DC,"Surge: +2 Damage, +1 Accuracy",1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +2 Damage and +1 Accuracy,None,surge ability
 Saska Teft,DC,"Surge: the target becomes Weakened, the target becomes Stunned",1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: the target becomes Weakened and the target becomes Stunned (applies after the attack resolves),condition,surge ability
 Saw Gerrera,DC,Surge: +2 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +2 Damage,None,surge ability
+Saw Gerrera,DC,Surge: +2 Accuracy,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +2 Accuracy,None,surge ability
 Saw Gerrera,DC,Surge: you become Hidden,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: you become Hidden (applies after the attack resolves),condition,surge ability
 SC2-M Repulsor Tank,DC,Surge: +2 Damage,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: +2 Damage,None,surge ability
 SC2-M Repulsor Tank,DC,Surge: Blast 1,1,spend_surges,attacker,prompt,TRUE,None,None,None,TRUE,Spend 1 surge: Blast 1 (applies after the attack resolves),damage,surge ability

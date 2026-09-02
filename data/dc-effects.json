@@ -5843,6 +5843,7 @@
       ],
       "surgeAbilities": [
         "damage 2",
+        "accuracy 2",
         "hide"
       ],
       "attachment": false,
