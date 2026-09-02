@@ -66,8 +66,10 @@ export const SURGE_BUCKET = Object.freeze({
   interrogate: 'no_restriction',     // Agent Blaise: view hand / force discard
   military_efficiency: 'no_restriction', // Leia: shuffle a CC back into the deck
   recover: 'no_restriction',         // self-heal
-  'hit token': 'no_restriction',
-  'hit token 2': 'no_restriction',
+  'damage token': 'no_restriction',
+  'damage token 2': 'no_restriction',
+  'hit token': 'no_restriction',      // pre-2026-09-02 spelling
+  'hit token 2': 'no_restriction',    // pre-2026-09-02 spelling
   'block token': 'no_restriction',
   'power token': 'no_restriction',
   'evade token': 'no_restriction',
@@ -95,7 +97,8 @@ export const SURGE_BUCKET = Object.freeze({
  */
 export const SURGE_TIMING = Object.freeze({
   // immediate (applied in the spend handler) — only the resource/redraw surges
-  'hit token': 'immediate', 'hit token 2': 'immediate', 'block token': 'immediate',
+  'damage token': 'immediate', 'damage token 2': 'immediate', 'block token': 'immediate',
+  'hit token': 'immediate', 'hit token 2': 'immediate',  // pre-2026-09-02 spellings
   'power token': 'immediate', 'evade token': 'immediate', evade: 'immediate',
   'block 1': 'immediate', 'surge 1': 'immediate',
   kd_redraw: 'immediate', tn_redraw: 'immediate', utinni_vp_1: 'immediate',
@@ -119,7 +122,7 @@ export const SURGE_TIMING = Object.freeze({
 export function getSurgeBucket(key) {
   const k = String(key || '').replace(/^double:/, '').replace(/\s*\([^)]*\)/g, '').toLowerCase().trim();
   if (SURGE_BUCKET[k]) return SURGE_BUCKET[k];
-  // Numbered keyword surges ("blast 2", "cleave 3", "hit token 2") collapse to
+  // Numbered keyword surges ("blast 2", "cleave 3", "damage token 2") collapse to
   // their base keyword's bucket.
   const m = k.match(/^([a-z ]+?)\s+\d+$/);
   if (m && SURGE_BUCKET[m[1]]) return SURGE_BUCKET[m[1]];

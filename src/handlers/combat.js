@@ -7185,8 +7185,11 @@ export async function handleCombatSurge(interaction, ctx) {
         combat.deferredSurgeHide = true;
       }
       // Power token grants to attacker's figurePowerTokens
-      if ((mod.surgeGrantHitToken || 0) > 0 && combat.attackerFigureKey) {
-        grantPowerTokens(game, combat.attackerFigureKey, 'Damage', mod.surgeGrantHitToken);
+      // `surgeGrantHitToken` is the pre-2026-09-02 field name, read here so an
+      // attack already in flight when this shipped still grants its token.
+      const _grantDmgTok = mod.surgeGrantDamageToken ?? mod.surgeGrantHitToken;
+      if ((_grantDmgTok || 0) > 0 && combat.attackerFigureKey) {
+        grantPowerTokens(game, combat.attackerFigureKey, 'Damage', _grantDmgTok);
       }
       if ((mod.surgeGrantBlockToken || 0) > 0 && combat.attackerFigureKey) {
         grantPowerTokens(game, combat.attackerFigureKey, 'Block', mod.surgeGrantBlockToken);

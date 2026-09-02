@@ -6,7 +6,7 @@
  * 1. Jarrod's third surge was booked as a GENERIC power token, which prompts the
  *    player to pick a face. His card prints the filled badge with the white
  *    four-pointed star — the same badge Cassian Andor's "Gain 2" uses, and our
- *    data calls that one "hit token". Gar Saxon (trefoil) and the 74-Z (circular
+ *    data calls that one a Damage token. Gar Saxon (trefoil) and the 74-Z (circular
  *    arrows) print visibly different badges for their block/evade tokens, so the
  *    three are distinguishable and Jarrod's is unambiguously Damage.
  *
@@ -33,14 +33,20 @@ const rowsFor = (card) => abilitiesForCard(card) || [];
 
 describe('Jarrod Kelvin — the surge grants a DAMAGE token, not a player choice', () => {
   test('data grants a Damage token', () => {
-    assert.deepEqual(dc['Jarrod Kelvin'].surgeAbilities, ['damage 2', 'pierce 2', 'hit token']);
+    assert.deepEqual(dc['Jarrod Kelvin'].surgeAbilities, ['damage 2', 'pierce 2', 'damage token']);
   });
 
   test('it resolves to a Damage token and NOT to a face prompt', async () => {
     const { parseSurgeEffect } = await import('../../../src/game/combat.js');
-    const out = parseSurgeEffect('hit token');
-    assert.equal(out.surgeGrantHitToken, 1);
+    const out = parseSurgeEffect('damage token');
+    assert.equal(out.surgeGrantDamageToken, 1);
     assert.ok(!out.surgeGrantPowerToken, 'a generic power token would prompt the player to pick a face');
+    // alexanbv 2026-09-02: "all instances of hit token should be changed to
+    // damage token and unified". The old spelling still parses, so an attack in
+    // flight across the deploy keeps its grant instead of silently losing it.
+    assert.equal(parseSurgeEffect('hit token').surgeGrantDamageToken, 1);
+    assert.equal(parseSurgeEffect('hit token 2').surgeGrantDamageToken, 2);
+    assert.equal(parseSurgeEffect('damage token 2').surgeGrantDamageToken, 2);
   });
 
   test('no card is left on the generic "power token" value', () => {

@@ -52,7 +52,7 @@ describe('SURGE_BUCKET — single source of truth', () => {
 
 describe('SURGE_TIMING — immediate vs deferred (second, independent dimension)', () => {
   it('resource/redraw surges resolve immediately at spend time', () => {
-    for (const k of ['hit token', 'power token', 'block token', 'evade token',
+    for (const k of ['damage token', 'hit token', 'power token', 'block token', 'evade token',
                      'kd_redraw', 'tn_redraw', 'utinni_vp_1']) {
       assert.equal(SURGE_TIMING[k], 'immediate', k);
     }

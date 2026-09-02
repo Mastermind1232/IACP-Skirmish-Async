@@ -1146,7 +1146,7 @@ export function resolveAbility(abilityId, context) {
     if (!game || !playerNum || !meta) return { applied: false, manualMessage: `Resolve ${entry.label} manually.` };
     const mapId = game.selectedMap?.id;
     const activatingKeys = getFigureKeysForDcMsg(game, playerNum, meta);
-    // Helper: add Hit tokens to a figure key — overflow handled by grantPowerTokens
+    // Helper: add Damage tokens to a figure key — overflow handled by grantPowerTokens
     function addHitToken(fk, n) {
       if (n <= 0) return;
       grantPowerTokens(game, fk, 'Damage', n);
@@ -1169,7 +1169,7 @@ export function resolveAbility(abilityId, context) {
         }
         parts.push(`${dcNameFromFigureKey(targetFigureKey)} recovered ${recoverTarget} Damage`);
       }
-      // Hit tokens
+      // Damage tokens
       if (hitTokenSelf > 0) { const sfk = activatingKeys[0]; if (sfk) { addHitToken(sfk, hitTokenSelf); parts.push(`you gained ${hitTokenSelf} Damage Token`); } }
       if (hitTokenTarget > 0) { addHitToken(targetFigureKey, hitTokenTarget); parts.push(`${dcNameFromFigureKey(targetFigureKey)} gained ${hitTokenTarget} Damage Token`); }
       // Power Token grant (player chooses type via pendingPowerTokenGrant)
@@ -6094,7 +6094,7 @@ export function resolveAbility(abilityId, context) {
       eligible.push(efk);
     }
 
-    // Phase 2+: sequential allocation — player picks one figure at a time to receive a Hit token
+    // Phase 2+: sequential allocation — player picks one figure at a time to receive a Damage token
     const pending = game.pendingCombatResupply?.[msgId];
     if (pending && choiceIndex != null && targetFigureKey) {
       grantPowerTokens(game, targetFigureKey, 'Damage', 1);
@@ -6119,10 +6119,10 @@ export function resolveAbility(abilityId, context) {
       };
     }
 
-    // Phase 1: initial call — start Hit token distribution (no Power Token grant;
-    // the card only distributes Hit tokens).
+    // Phase 1: initial call — start Damage token distribution (no Power Token grant;
+    // the card only distributes Damage tokens).
     if (eligible.length === 0) {
-      return { applied: true, logMessage: `**Combat Resupply** — No friendly figures within 3 spaces eligible for Hit tokens.` };
+      return { applied: true, logMessage: `**Combat Resupply** — No friendly figures within 3 spaces eligible for Damage tokens.` };
     }
 
     // Auto-distribute if only 1 eligible figure
@@ -12228,7 +12228,7 @@ export function resolveAbility(abilityId, context) {
 
   // ccEffect: grantHitTokensToActivating (Transmit the Plans) — CSV row 859:
   // "distribute 2 Damage Tokens AMONG friendly figures". Sequential picker (mirrors
-  // Combat Resupply): the player assigns one Hit token at a time to any friendly
+  // Combat Resupply): the player assigns one Damage token at a time to any friendly
   // figure. The vpNoteIfAdjacentTerminal reminder rides along on the first call.
   if (entry.type === 'ccEffect' && typeof entry.grantHitTokensToActivating === 'number') {
     const { game, playerNum, dcMessageMeta, choiceIndex, targetFigureKey } = context;
@@ -12263,7 +12263,7 @@ export function resolveAbility(abilityId, context) {
       .filter(([efk, pos]) => pos && (game.figurePowerTokens?.[efk] || []).length < getMaxPowerTokens(efk))
       .map(([efk]) => efk);
 
-    // Phase 2+: sequential allocation — assign 1 Hit token to the chosen figure.
+    // Phase 2+: sequential allocation — assign 1 Damage token to the chosen figure.
     const pending = game.pendingTransmitPlans?.[msgId];
     if (pending && choiceIndex != null && targetFigureKey) {
       grantPowerTokens(game, targetFigureKey, 'Damage', 1);

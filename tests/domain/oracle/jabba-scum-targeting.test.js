@@ -138,3 +138,61 @@ describe('the SCUM filter is WIRED, not merely declared', () => {
     assert.ok(!/SCUM/i.test(row.effect + row.affects_others), 'the glyph is absent from the card, so it stays absent here');
   });
 });
+
+describe('ownership: who each ability may target', () => {
+  // alexanbv 2026-09-02, closing the question the first pass left open:
+  // "bully is unrestricted. The other two are scum only. Incentivize is
+  // technically any figure, though it doesnt make sense to focus opponents.
+  // Order Hit is only friendly. Bully can target any figure and of course
+  // should only be used against opponents."
+  //
+  // So the three differ on BOTH axes and no two share a rule:
+  //   Bully       any affiliation, any owner
+  //   Incentivize SCUM only,       any owner
+  //   Order Hit   SCUM only,       friendly only
+  test('Incentivize reaches a SCUM figure on EITHER side, and no Imperial', async () => {
+    const { resolveAbility } = await import('../../../src/game/abilities.js');
+    const pick = (p) => Object.keys(dc).find((k) => !k.startsWith('[') && !dc[k]?.attachment && p(dc[k]));
+    const mine = pick((v) => v?.affiliation === 'Scum' && !v?.elite);
+    const theirs = pick((v) => v?.affiliation === 'Scum' && v?.elite);
+    const imp = pick((v) => v?.affiliation === 'Imperial');
+    assert.ok(mine && theirs && imp && mine !== theirs, 'fixture needs three distinct cards');
+
+    const game = {
+      figurePositions: {
+        1: { [`${mine}-1-0`]: 'a1' },
+        2: { [`${theirs}-2-0`]: 'a2', [`${imp}-2-1`]: 'a3' },
+      },
+      dcActionsData: {},
+    };
+    const res = resolveAbility('incentivize_jabba', {
+      game, playerNum: 1, meta: null, msgId: 'm1', getDcEffects: () => dc,
+    });
+    const keys = res.targetFigureKeys || [];
+    assert.ok(keys.includes(`${mine}-1-0`), 'your own SCUM figure');
+    assert.ok(keys.includes(`${theirs}-2-0`), "and the opponent's — ownership is NOT a restriction here");
+    assert.ok(!keys.includes(`${imp}-2-1`), 'but never an Imperial');
+  });
+
+  test('Order Hit is friendly-only, by riding the friendly chooser', () => {
+    // Its pool comes from chooseFriendlyToFocus, which reads only
+    // figurePositions[playerNum]. That IS the friendly restriction.
+    assert.equal(lib.order_hit_jabba.chooseFriendlyToFocus, true);
+    const src = readFileSync(resolve(root, 'src/game/abilities.js'), 'utf8');
+    const branch = src.slice(src.indexOf("entry.chooseFriendlyToFocus) {"));
+    const pool = branch.slice(0, branch.indexOf('validTargets.push'));
+    assert.ok(pool.includes('game.figurePositions?.[playerNum]'), 'friendly side only');
+    assert.ok(!/opponentPlayerNum|enemyNum/.test(pool), 'and the opponent is never enumerated');
+  });
+
+  test('Incentivize does NOT ride that chooser, which is why it reaches both sides', () => {
+    // The two abilities take different code paths on purpose. If Incentivize is
+    // ever folded into the shared chooser it silently becomes friendly-only.
+    const src = readFileSync(resolve(root, 'src/game/abilities.js'), 'utf8');
+    const i = src.indexOf("abilityId === 'incentivize_jabba'");
+    assert.ok(i > 0);
+    const branch = src.slice(i, src.indexOf('validTargets.push', i));
+    assert.ok(/for \(const pn of \[playerNum, enemyNum\]\)/.test(branch),
+      'it enumerates both players itself');
+  });
+});

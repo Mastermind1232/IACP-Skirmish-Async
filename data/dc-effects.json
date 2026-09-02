@@ -824,7 +824,7 @@
       "surgeAbilities": [
         "pierce 3",
         "damage 2",
-        "hit token"
+        "damage token"
       ],
       "attachment": false,
       "elite": true,
@@ -1391,7 +1391,7 @@
       "surgeAbilities": [
         "accuracy 2",
         "damage 1",
-        "hit token"
+        "damage token"
       ],
       "attachment": false,
       "elite": true,
@@ -1762,7 +1762,7 @@
       "surgeAbilities": [
         "damage 2",
         "accuracy 2",
-        "hit token 2"
+        "damage token 2"
       ],
       "attachment": false,
       "elite": true,
@@ -1940,7 +1940,7 @@
       ],
       "surgeAbilities": [
         "damage 1",
-        "hit token",
+        "damage token",
         "accuracy 2, weaken"
       ],
       "attachment": false,
@@ -3884,7 +3884,7 @@
       "surgeAbilities": [
         "damage 2",
         "pierce 2",
-        "hit token"
+        "damage token"
       ],
       "attachment": false,
       "companion": "J4X-7",

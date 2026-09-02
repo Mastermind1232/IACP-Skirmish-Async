@@ -331,8 +331,8 @@ describe('Ahsoka Tano — condition traces', () => {
     assert.ok(cond(G, { attackerDcName: 'Ahsoka Tano', attackerPlayerNum: 1 }), 'owner active → fires');
     assert.ok(!cond(G, { attackerDcName: 'Random Figure', attackerPlayerNum: 1 }), 'non-owner → blocked');
   });
-  it('Surge: gain 1 Hit token p1: affects_self=TRUE → fires when owner is active', () => {
-    const cond = conditionForRow({ card: 'Ahsoka Tano', ability: 'Surge: gain 1 Hit token', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
+  it('Surge: gain 1 Damage token p1: affects_self=TRUE → fires when owner is active', () => {
+    const cond = conditionForRow({ card: 'Ahsoka Tano', ability: 'Surge: gain 1 Damage token', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
     assert.ok(cond(G, { attackerDcName: 'Ahsoka Tano', attackerPlayerNum: 1 }), 'owner active → fires');
     assert.ok(!cond(G, { attackerDcName: 'Random Figure', attackerPlayerNum: 1 }), 'non-owner → blocked');
   });
@@ -1043,8 +1043,8 @@ describe('CT-1701 — condition traces', () => {
     assert.ok(cond(G, { attackerDcName: 'CT-1701', attackerPlayerNum: 1 }), 'owner active → fires');
     assert.ok(!cond(G, { attackerDcName: 'Random Figure', attackerPlayerNum: 1 }), 'non-owner → blocked');
   });
-  it('Surge: gain 1 Hit token p1: affects_self=TRUE → fires when owner is active', () => {
-    const cond = conditionForRow({ card: 'CT-1701', ability: 'Surge: gain 1 Hit token', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
+  it('Surge: gain 1 Damage token p1: affects_self=TRUE → fires when owner is active', () => {
+    const cond = conditionForRow({ card: 'CT-1701', ability: 'Surge: gain 1 Damage token', part: '1', affects_self: 'TRUE', affects_others: 'None', attack_side: 'attacker', conditional: '', limit: '' });
     assert.ok(cond(G, { attackerDcName: 'CT-1701', attackerPlayerNum: 1 }), 'owner active → fires');
     assert.ok(!cond(G, { attackerDcName: 'Random Figure', attackerPlayerNum: 1 }), 'non-owner → blocked');
   });

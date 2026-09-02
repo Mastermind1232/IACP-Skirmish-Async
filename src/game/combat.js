@@ -232,6 +232,12 @@ export const SURGE_LABELS = {
   'gain 1': '+1 VP',
   'accuracy 2, pierce 1': '+2 Accuracy, Pierce 1',
   'evade token': 'Gain Evade Token',
+  'damage token': 'Gain Damage Token',
+  'damage token 2': 'Gain 2 Damage Tokens',
+  // Pre-2026-09-02 spellings. alexanbv: "all instances of hit token should be
+  // changed to damage token and unified". Kept readable so a game saved
+  // mid-attack, with the old string already on combat.bonusSurgeAbilities,
+  // still resolves instead of silently dropping the grant.
   'hit token': 'Gain Damage Token',
   'hit token 2': 'Gain 2 Damage Tokens',
 };
@@ -313,8 +319,8 @@ export function parseSurgeEffect(key) {
   if (k === 'focus') { out.surgeSelfFocus = true; return out; }
   if (k === 'hide') { out.surgeSelfHide = true; return out; }
   // Power token grants: attacker gains tokens to use on later rolls
-  if (k === 'hit token') { out.surgeGrantHitToken = 1; return out; }
-  if (k === 'hit token 2') { out.surgeGrantHitToken = 2; return out; }
+  if (k === 'damage token' || k === 'hit token') { out.surgeGrantDamageToken = 1; return out; }
+  if (k === 'damage token 2' || k === 'hit token 2') { out.surgeGrantDamageToken = 2; return out; }
   if (k === 'block token') { out.surgeGrantBlockToken = 1; return out; }
   if (k === 'power token') { out.surgeGrantPowerToken = 1; return out; }
   // Attacker gains an evade (for own next defense)
@@ -367,8 +373,8 @@ export function parseSurgeEffect(key) {
     else if (p === 'focus') out.surgeSelfFocus = true;
     // Token/power grants within a combo — wire each token type
     else if (p === 'block token') out.surgeGrantBlockToken = (out.surgeGrantBlockToken || 0) + 1;
-    else if (p === 'hit token') out.surgeGrantHitToken = (out.surgeGrantHitToken || 0) + 1;
-    else if (p === 'hit token 2') out.surgeGrantHitToken = (out.surgeGrantHitToken || 0) + 2;
+    else if (p === 'damage token' || p === 'hit token') out.surgeGrantDamageToken = (out.surgeGrantDamageToken || 0) + 1;
+    else if (p === 'damage token 2' || p === 'hit token 2') out.surgeGrantDamageToken = (out.surgeGrantDamageToken || 0) + 2;
     else if (p === 'evade token') out.surgeGrantEvade = (out.surgeGrantEvade || 0) + 1;
     else if (p === 'power token') out.surgeGrantPowerToken = (out.surgeGrantPowerToken || 0) + 1;
     else if (p === 'surge 1') out.surgeGrantExtraSurge = (out.surgeGrantExtraSurge || 0) + 1;
