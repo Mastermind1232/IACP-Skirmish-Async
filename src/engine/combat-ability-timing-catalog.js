@@ -40,13 +40,13 @@ e('clawdite_form', 'Clawdite Form', 'attacker', 'passive', ON, 'config form → 
 e('covering_fire', 'Covering Fire', 'attacker', 'passive', ON, 'roundTrooperSurgeStun + TROOPER → +stun surge');
 e('forward_mounted_blasters', 'Forward Mounted Blasters (74-Z)', 'attacker', 'interactive', ON, 'reroll-or-(-1 Dmg)');
 e('targeting_computer_attachment', 'Targeting Computer (attachment)', 'attacker', 'passive', ON, 'atk upgrade → +1 atk reroll');
-e('driven_by_hatred_attachment', 'Driven by Hatred (attachment)', 'attacker', 'passive', ON, 'atk upgrade → +1 Hit, +1 reroll');
+e('driven_by_hatred_attachment', 'Driven by Hatred (attachment)', 'attacker', 'passive', ON, 'atk upgrade → +1 Damage, +1 reroll');
 e('heir_to_the_jedi', 'Heir to the Jedi (attachment)', 'attacker', 'passive', ON, 'atk upgrade → +1 reroll/+Hit');
 e('prey_on_the_weak', 'Prey on the Weak (attachment)', 'attacker', 'passive', ON, 'atk cost > def cost → Pierce 1 + Acc 1');
 e('explosive_armaments', 'Explosive Armaments (attachment)', 'attacker', 'passive', ON, '+blast surge; exhaust → Blast 1');
 e('feeding_frenzy', 'Feeding Frenzy (attachment)', 'attacker', 'passive', ON, 'dist≤1 → recover surge');
 e('focused_on_the_kill', 'Focused on the Kill (IG-88)', 'attacker', 'passive', ON, 'swap recover→pierce surge + auto-Focus');
-e('scavenged_weaponry', 'Scavenged Weaponry (attachment)', 'attacker', 'passive', ON, 'exhaust → +1 Hit');
+e('scavenged_weaponry', 'Scavenged Weaponry (attachment)', 'attacker', 'passive', ON, 'exhaust → +1 Damage');
 e('the_darksaber_declare', 'The Darksaber (attachment, declare)', 'attacker', 'passive', ON, 'exhaust → +1 reroll');
 e('rotary_cannon_z6', 'Rotary Cannon (Z-6 Trooper)', 'attacker', 'passive', ON, 'atk upgrade → auto-Focus');
 // 'the_generals_ranks' is now an EXECUTABLE mods passive (combat-abilities-mods.js,

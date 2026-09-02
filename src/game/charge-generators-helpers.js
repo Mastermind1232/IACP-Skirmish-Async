@@ -2,7 +2,7 @@
  * Pure helpers for AT-DP's **Charge Generators**.
  *
  * Card text: "While attacking, if you have suffered fewer than 9
- *  Damage, apply +1 Hit to the attack results and you may reroll 1
+ *  Damage, apply +1 Damage to the attack results and you may reroll 1
  *  attack die."
  *
  * Attacker passive with health-state gate (strict: <9). Single DC

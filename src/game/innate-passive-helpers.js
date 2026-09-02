@@ -13,7 +13,7 @@
  *
  * Strings handled (case-insensitive, trimmed): "+N Damage", "Damage N",
  * "+N Hit", "+N Hits", "+N Surge", "+N Block", "Block N", "+N Evade",
- * "Evade N". Multi-bonus strings like "+1 Hit, +1 Accuracy, +1 Block"
+ * "Evade N". Multi-bonus strings like "+1 Damage, +1 Accuracy, +1 Block"
  * are split on commas and each part parsed independently.
  *
  * Out of scope (per destruct's specific list 2026-05-06): +Accuracy and

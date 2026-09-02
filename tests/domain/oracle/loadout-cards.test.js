@@ -85,9 +85,15 @@ describe('all four contributions are wired', () => {
     assert.ok(!loadouts.Electrohammer.passive);
   });
 
-  test('the chosen Loadout is per-figure, not per-card', () => {
-    // Two Purge Troopers in one group can carry different Loadouts.
+  test('the chosen Loadout is keyed by FIGURE', () => {
+    // alexanbv 2026-09-02: "purge troopers are a group of size 1. If 2 are in
+    // a list, they are different groups. They may have the same or different
+    // loadouts." So the figure key is the right granularity — two Purge
+    // Troopers are two GROUPS, not two figures of one group, and each carries
+    // its own Loadout.
     assert.match(handlers, /getConfig\(game, attackerFigureKey\)\?\.loadout/);
+    assert.equal(dc['Purge Trooper (Elite)'].figures, 1, 'one figure per group');
+    assert.equal(dc['Purge Trooper (Elite)'].subCost, undefined, 'and no sub-cost, so no second figure');
   });
 
   test('each Loadout has card art to show the player', () => {

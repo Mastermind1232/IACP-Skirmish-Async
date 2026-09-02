@@ -157,7 +157,7 @@ registerCombatAbility({
 // "While a listed friendly figure is attacking, it may discard 1 Power Token of
 // any type from another friendly figure to add +1 Damage to the attack results."
 // A mods interactive: the resolver picks a donor ally + spends one of their Power
-// Tokens for +1 Hit (COMBAT_RESOLVERS.rogue_one). `applies` requires the team to
+// Tokens for +1 Damage (COMBAT_RESOLVERS.rogue_one). `applies` requires the team to
 // hold [Rogue One], the attacker to be a listed Rogue One figure, and at least
 // one OTHER friendly figure to carry a Power Token (the resource to spend). Once
 // per attack. (The legacy surge-window button path is retained for the non-gate
@@ -194,7 +194,7 @@ registerCombatAbility({
 // the attacking figure, nor Bib himself, being SCUM). Gated on: (a) a friendly
 // Bib Fortuna carrying Illicit Arms in play, (b) the attacker's army primary
 // affiliation is Scum, (c) a Command card in the attacker's hand to spend.
-// Resolver discards 1 CC → +1 Hit (COMBAT_RESOLVERS.illicit_arms). Clobbers the
+// Resolver discards 1 CC → +1 Damage (COMBAT_RESOLVERS.illicit_arms). Clobbers the
 // timing-only catalog entry (same id) per the per-id last-write rule.
 export function illicitArmsEligible(game, combat, deps) {
   const pn = combat.attackerPlayerNum;
@@ -636,7 +636,7 @@ registerCombatAbility({
   },
 });
 
-// Forest Fighters (Ewok Warrior Elite) — +1 Hit on a Melee attack while Hidden.
+// Forest Fighters (Ewok Warrior Elite) — +1 Damage on a Melee attack while Hidden.
 registerCombatAbility({
   id: 'forest_fighters', name: 'Forest Fighters', windows: ['mods'], side: 'attacker', kind: 'passive',
   applies: (game, combat, side, deps) => {

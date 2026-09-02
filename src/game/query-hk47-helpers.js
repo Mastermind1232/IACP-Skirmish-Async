@@ -1,10 +1,10 @@
 /**
  * Pure helpers for HK-47's **Query**.
  *
- * Card text: "When declaring an attack, apply +1 Hit unless the
+ * Card text: "When declaring an attack, apply +1 Damage unless the
  *  defender becomes Bleeding."
  *
- * Attacker passive. +1 Hit applies at declare-time; if the attack
+ * Attacker passive. +1 Damage applies at declare-time; if the attack
  * later inflicts Bleeding on the defender, the bonus is REMOVED via
  * the `queryBonusHitApplied` flag tracked in pendingCombat. This
  * helper covers only the declare-time bonus + flag. The remove-on-

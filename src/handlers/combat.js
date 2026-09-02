@@ -2943,7 +2943,7 @@ export async function _fireModsPassive(side, id, thread, game, combat, ctx) {
     if (hasAcpScattergun(sids)) {
       const r = applyScattergunHits(combat, ACP_SCATTERGUN_HIT_DELTA);
       combat.bonusHits = r.bonusHits;
-      await thread.send('**ACP Scattergun** — adjacent to target: +2 Hits.').catch(discordCatch);
+      await thread.send('**ACP Scattergun** — adjacent to target: +2 Damage.').catch(discordCatch);
     } else {
       const r = applyScattergunHits(combat, SCATTERGUN_HIT_DELTA);
       combat.bonusHits = r.bonusHits;

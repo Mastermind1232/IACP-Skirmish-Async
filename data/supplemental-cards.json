@@ -8,7 +8,7 @@
         "flurryOfBlows": true,
         "deadly": true
       },
-      "description": "Pierce 2. Surge: +1 Hit.\nFlurry of Blows: After attack, free melee attack (1 green die, +1 Hit). 1/activation.\nDeadly: -1 Evade to defense results."
+      "description": "Pierce 2. Surge: +1 Damage.\nFlurry of Blows: After attack, free melee attack (1 green die, +1 Damage). 1/activation.\nDeadly: -1 Evade to defense results."
     },
     "Electrohammer": {
       "label": "Electrohammer",
@@ -17,7 +17,7 @@
       "abilities": {
         "electropulse": true
       },
-      "description": "Pierce 2. Surge: +2 Hit.\nElectro-pulse: After attack, each figure adjacent to target suffers 1 Strain."
+      "description": "Pierce 2. Surge: +2 Damage.\nElectro-pulse: After attack, each figure adjacent to target suffers 1 Strain."
     },
     "Electrostaff": {
       "label": "Electrostaff",
@@ -27,7 +27,7 @@
       "abilities": {
         "quickStrike": true
       },
-      "description": "Pierce 2. Reach. Surge: +1 Hit.\nQuick Strike: After attack, if defender rerolled/modified defense, defender suffers 1 Strain."
+      "description": "Pierce 2. Reach. Surge: +1 Damage.\nQuick Strike: After attack, if defender rerolled/modified defense, defender suffers 1 Strain."
     }
   },
   "formCards": {
@@ -54,11 +54,11 @@
     "Soldier": {
       "label": "Soldier",
       "surgeAbilities": ["+2 accuracy", "blast 1"],
-      "passives": ["+1 Accuracy", "+1 Hit", "+1 Block", "Professional"],
+      "passives": ["+1 Accuracy", "+1 Damage", "+1 Block", "Professional"],
       "abilities": {
         "shieldsUp": true
       },
-      "description": "+1 Accuracy, +1 Hit surge, +1 Block surge.\nSurge: +2 Accuracy. Surge: Blast 1 Strain.\nShields Up: Place energy shield adjacent (Health 4, no defense).\nProfessional: Reroll 1 attack die."
+      "description": "+1 Accuracy, +1 Damage surge, +1 Block surge.\nSurge: +2 Accuracy. Surge: Blast 1 Strain.\nShields Up: Place energy shield adjacent (Health 4, no defense).\nProfessional: Reroll 1 attack die."
     },
     "Streetrat": {
       "label": "Streetrat",
@@ -68,7 +68,7 @@
         "assassinsBlade": true,
         "fleet": { "mp": 2 }
       },
-      "description": "+1 Surge, +Gain 1 Power Token surge.\nSurge: +1 Hit.\nAssassin's Blade: After attack, roll 1 red die, adjacent hostile suffers Strain = Hits.\nFleet: +2 MP at activation start."
+      "description": "+1 Surge, +Gain 1 Power Token surge.\nSurge: +1 Damage.\nAssassin's Blade: After attack, roll 1 red die, adjacent hostile suffers Strain = Hits.\nFleet: +2 MP at activation start."
     }
   }
 }

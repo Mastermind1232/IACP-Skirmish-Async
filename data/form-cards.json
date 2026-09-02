@@ -22,7 +22,7 @@
     },
     "Streetrat": {
       "abilityText": "Assassin's Blade: After this attack resolves, choose an adjacent hostile figure and roll 1 red die. That figure suffers damage equal to the Hit results.\n\nFleet: At the start of your activation, gain 2 movement points.",
-      "passives": ["+1 Hit"],
+      "passives": ["+1 Damage"],
       "surgeKeys": ["gain 1"],
       "fleetMp": 2,
       "imagePath": "vassal_extracted/images/dc-supplemental/IACP_Shape Card--Clawdite Shapeshifter - Streetrat.png"

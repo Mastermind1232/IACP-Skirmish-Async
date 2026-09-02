@@ -2,7 +2,7 @@
  * Pure helpers for Ewok Warrior Elite's **Forest Fighters**.
  *
  * Card text: "While performing a melee attack, if you are Hidden,
- *  apply +1 Hit to the attack results."
+ *  apply +1 Damage to the attack results."
  *
  * Helper owns slug id, required condition, hit delta, and the
  * qualification predicate (melee attack + attacker Hidden).

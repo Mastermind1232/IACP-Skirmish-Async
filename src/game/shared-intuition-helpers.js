@@ -4,7 +4,7 @@
  * comment misattributed it to Tress Hacnua).
  *
  * Card text: "While attacking, if another friendly HUNTER is
- *  within 3 spaces of you and has LOS to the target, apply +1 Hit
+ *  within 3 spaces of you and has LOS to the target, apply +1 Damage
  *  to the attack results."
  *
  * Helper owns slug id, range predicate (distance ≤ 3), required

@@ -2,36 +2,36 @@
   "source": "Symbol Labeling Tool",
   "outcomes": {
     "red": {
-      "1": "+1 Hit",
-      "2": "+2 Hit",
-      "3": "+2 Hit",
-      "4": "+2 Hit, +1 Surge",
-      "5": "+3 Hit",
-      "6": "+3 Hit"
+      "1": "+1 Damage",
+      "2": "+2 Damage",
+      "3": "+2 Damage",
+      "4": "+2 Damage, +1 Surge",
+      "5": "+3 Damage",
+      "6": "+3 Damage"
     },
     "blue": {
       "1": "+2 Accuracy, +1 Surge",
-      "2": "+2 Accuracy, +1 Hit",
-      "3": "+5 Accuracy, +1 Hit",
-      "4": "+3 Accuracy, +1 Hit, +1 Surge",
-      "5": "+3 Accuracy, +2 Hit",
-      "6": "+4 Accuracy, +2 Hit"
+      "2": "+2 Accuracy, +1 Damage",
+      "3": "+5 Accuracy, +1 Damage",
+      "4": "+3 Accuracy, +1 Damage, +1 Surge",
+      "5": "+3 Accuracy, +2 Damage",
+      "6": "+4 Accuracy, +2 Damage"
     },
     "green": {
       "1": "+1 Accuracy, +1 Surge",
-      "2": "+1 Accuracy, +1 Hit, +1 Surge",
-      "3": "+2 Accuracy, +1 Hit, +1 Surge",
-      "4": "+3 Accuracy, +2 Hit",
-      "5": "+1 Accuracy, +2 Hit",
-      "6": "+2 Accuracy, +2 Hit"
+      "2": "+1 Accuracy, +1 Damage, +1 Surge",
+      "3": "+2 Accuracy, +1 Damage, +1 Surge",
+      "4": "+3 Accuracy, +2 Damage",
+      "5": "+1 Accuracy, +2 Damage",
+      "6": "+2 Accuracy, +2 Damage"
     },
     "yellow": {
       "1": "+1 Surge",
       "2": "+2 Accuracy, +1 Surge",
-      "3": "+2 Accuracy, +1 Hit",
-      "4": "+1 Accuracy, +1 Hit, +1 Surge",
-      "5": "+1 Accuracy, +2 Hit",
-      "6": "+1 Hit, +2 Surge"
+      "3": "+2 Accuracy, +1 Damage",
+      "4": "+1 Accuracy, +1 Damage, +1 Surge",
+      "5": "+1 Accuracy, +2 Damage",
+      "6": "+1 Damage, +2 Surge"
     },
     "white": {
       "1": "blank",

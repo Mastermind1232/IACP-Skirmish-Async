@@ -2,9 +2,9 @@
   "source": "IACP Loadout Cards (Purge Trooper Elite options); dc-supplemental",
   "cards": {
     "Electrobatons": {
-      "abilityText": "Ability (Flurry of Blows): After you resolve an attack during your activation, you may perform a Melee attack using 1 green die. Apply +1 Hit to the attack results. Limit once per activation.",
+      "abilityText": "Ability (Flurry of Blows): After you resolve an attack during your activation, you may perform a Melee attack using 1 green die. Apply +1 Damage to the attack results. Limit once per activation.",
       "surges": [
-        { "surgeCost": 1, "label": "+1 Hit" },
+        { "surgeCost": 1, "label": "+1 Damage" },
         { "surgeCost": 1, "label": "Pierce 2" },
         { "surgeCost": 1, "label": "Apply -1 Dodge to the defense results", "name": "Deadly" }
       ],
@@ -15,7 +15,7 @@
     "Electrohammer": {
       "abilityText": "Ability (Electro-pulse): After you resolve an attack, each other figure adjacent to the target space suffers 1 Damage.",
       "surges": [
-        { "surgeCost": 1, "label": "+2 Hits" },
+        { "surgeCost": 1, "label": "+2 Damage" },
         { "surgeCost": 1, "label": "Pierce 2" }
       ],
       "surgeKeys": ["damage 2", "pierce 2"],
@@ -25,7 +25,7 @@
     "Electrostaff": {
       "abilityText": "Ability (Quick Strike): After you resolve an attack, if the defending player rerolled a defense die or modified the dice pool or defense results, the defender suffers 1 Damage.",
       "surges": [
-        { "surgeCost": 1, "label": "+1 Hit" },
+        { "surgeCost": 1, "label": "+1 Damage" },
         { "surgeCost": 1, "label": "Pierce 2" }
       ],
       "surgeKeys": ["damage 1", "pierce 2"],

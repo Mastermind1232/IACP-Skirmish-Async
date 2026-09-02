@@ -781,7 +781,7 @@ async function fireBarrage(thread, game, combat, effect, ctx) {
 
 /**
  * Flurry of Blows (Electrobaton loadout): hit-gated free 1-green-die
- * melee attack with +1 Hit, once per activation. Stages override-dice +
+ * melee attack with +1 Damage, once per activation. Stages override-dice +
  * the chain attack.
  */
 async function fireFlurryOfBlows(thread, game, combat, effect, ctx) {
@@ -797,7 +797,7 @@ async function fireFlurryOfBlows(thread, game, combat, effect, ctx) {
     flagKey: 'freeAttackBonusPending',
     flagValue: true,
     pendingOverrideAttackDice: { dice: ['green'], type: 'melee', bonusHits: 1 },
-    message: '**Flurry of Blows** — You may perform a Melee attack using 1 green die (+1 Hit). Declare it below.',
+    message: '**Flurry of Blows** — You may perform a Melee attack using 1 green die (+1 Damage). Declare it below.',
   });
 }
 

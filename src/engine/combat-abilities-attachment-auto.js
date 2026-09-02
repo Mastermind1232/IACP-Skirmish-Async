@@ -36,7 +36,7 @@ const AUTO_ATTACHMENT_PASSIVES = [
   { id: 'driven_by_hatred_hit', name: 'Driven by Hatred', side: 'attacker', card: 'Driven by Hatred' },
   { id: 'wookiee_avenger_hit', name: 'Wookiee Avenger', side: 'attacker', card: 'Wookiee Avenger' },
   { id: 'combat_suit_reduce_pierce', name: 'Combat Suit', side: 'defender', card: 'Combat Suit' },
-  // Heir to the Jedi: +1 Hit only on a Ranged attack.
+  // Heir to the Jedi: +1 Damage only on a Ranged attack.
   { id: 'heir_to_the_jedi_hit', name: 'Heir to the Jedi', side: 'attacker', card: 'Heir to the Jedi', cond: (g, c) => !!c.isRanged },
   // Prey on the Weak: +1 Pierce +1 Accuracy when the attacker costs MORE than the target.
   { id: 'prey_on_the_weak', name: 'Prey on the Weak', side: 'attacker', card: 'Prey on the Weak',

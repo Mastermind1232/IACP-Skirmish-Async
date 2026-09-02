@@ -758,7 +758,7 @@ export async function _runDcEorForPlayer(game, gameId, interaction, ctx, _eorPla
       if (Number(info?.playerNum) === _eorPlayerNum) delete game.adrenalineBonuses[msgId];
     }
   }
-  // Scavenged Walker: end of round, may interrupt to perform an attack with -1 Hit
+  // Scavenged Walker: end of round, may interrupt to perform an attack with -1 Damage
   for (const pn of _eorPlayers) {
     const _swMsgIds = getDcMessageIds(game, pn) || [];
     const _swDcList = getDcList(game, pn) || [];

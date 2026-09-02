@@ -4,10 +4,10 @@
  *
  * Card text: "While attacking, become Focused. If you resolve an
  *  attack die reroll that results in fewer Hits on that die, apply
- *  +1 Hit to the attack results."
+ *  +1 Damage to the attack results."
  *
  * Helper owns slug id, the Focus-on-declare parameters, the
- * reroll-hit comparison predicate, and the +1 Hit delta. The
+ * reroll-hit comparison predicate, and the +1 Damage delta. The
  * once-per-attack latch (advTcBonusApplied) and applyConditionWithDie
  * engine call stay handler-owned.
  *

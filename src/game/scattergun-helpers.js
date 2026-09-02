@@ -1,6 +1,6 @@
 /**
  * Pure helpers for **Scattergun** pair — Trandoshan Hunter Elite
- *  (ACP Scattergun, +2 Hits) and Regular (Scattergun, +1 Hit).
+ *  (ACP Scattergun, +2 Damage) and Regular (Scattergun, +1 Damage).
  *
  * Card text: "When attacking an adjacent hostile figure, apply
  *  +N Hits to the attack results." (N=2 elite, N=1 regular.)

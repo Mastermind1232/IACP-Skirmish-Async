@@ -2,12 +2,12 @@
  * Pure helpers for Rebel Trooper (Elite/Regular)'s **Aim**.
  *
  * Card text: "If you have not exited a space during this activation,
- *  apply +1 Hit and +2 Accuracy to your attack results."
+ *  apply +1 Damage and +2 Accuracy to your attack results."
  *
  * Engine semantics (src/handlers/combat.js ~line 2107):
  *   - "Has not moved" is tracked via game.figureMoved[figureKey];
  *     truthy = moved at least once this activation.
- *   - Bonus is a single flat +1 Hit / +2 Accuracy; not stackable with
+ *   - Bonus is a single flat +1 Damage / +2 Accuracy; not stackable with
  *     itself (the probe locks this in so future refactors don't
  *     silently make it apply per-die or per-roll).
  *

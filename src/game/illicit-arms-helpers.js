@@ -3,9 +3,9 @@
  *
  * Card text: "While a friendly figure is attacking, if army
  *  affiliation is Scum, you may discard 1 Command card from your
- *  hand to apply +1 Hit to the attack (once per attack)."
+ *  hand to apply +1 Damage to the attack (once per attack)."
  *
- * Helper owns slug id, required-affiliation ('scum'), +1 Hit bonus,
+ * Helper owns slug id, required-affiliation ('scum'), +1 Damage bonus,
  * and the per-figure eligibility predicate. Friendly-figure scan,
  * hand lookup, pendingIllicitArms state write, and button UI stay
  * handler-owned.

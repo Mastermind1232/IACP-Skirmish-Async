@@ -344,7 +344,7 @@ export function enqueueAttackerPerDcEffects(combat, game, deps) {
     });
   }
   // Flurry of Blows (Electrobaton loadout post-attack): hit-gated.
-  // 1-green-die melee with +1 Hit, once per activation. Fire handler
+  // 1-green-die melee with +1 Damage, once per activation. Fire handler
   // does dice override + chain-attack staging.
   if (combat.loadoutPostAttack === 'flurry_of_blows' && combat._step7Hit && combat.attackerMsgId) {
     const _fobKey = `flurryOfBlows_${combat.attackerFigureKey}`; // per-figure (alexanbv 2026-06-13)

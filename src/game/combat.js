@@ -258,7 +258,7 @@ export const SURGE_LABELS = {
 export function getAttackerSurgeAbilities(combat) {
   // Tusken Cycler: no abilities (including surge abilities) during this attack.
   // Close and Personal / Lightbow suppress the figure's NATIVE surge abilities
-  // but explicitly grant replacement surges (e.g. "using only Surge: +1 Hit,
+  // but explicitly grant replacement surges (e.g. "using only Surge: +1 Damage,
   // Surge: Pierce 4"), supplied via combat.bonusSurgeAbilities — keep those.
   if (combat.blockSurgeAbilities) return [...(combat?.bonusSurgeAbilities || [])];
   // Reverse Engineer: use the defender's DC surge abilities instead of the
