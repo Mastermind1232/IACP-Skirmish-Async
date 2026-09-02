@@ -2314,8 +2314,11 @@
         "white"
       ],
       "surgeAbilities": [
-        "damage 1, stun",
-        "damage 1, accuracy 2"
+        "damage 1, stun"
+      ],
+      "abilities": [
+        "+2 Accuracy",
+        "+1 Damage"
       ],
       "attachment": false,
       "companion": true,
@@ -2347,7 +2350,8 @@
       ],
       "surgeAbilities": [
         "damage 2, accuracy 1",
-        "pierce 1"
+        "pierce 1",
+        "damage 1, accuracy 2"
       ],
       "attachment": false,
       "elite": true,
