@@ -4,10 +4,13 @@
  * alexanbv 2026-09-02: "Some figures have surge for bleed, some figures have
  * innate bleed. Make sure it is correct which is which."
  *
- * 15 cards carry Bleed. All were checked against their own card art at full
- * resolution. 14 are correct; [Flame Trooper] is not, and its defects are
- * raised with alexanbv rather than fixed here (six edits on one card including
- * a stat, on a Squad Upgrade, which is his ruleset).
+ * 15 cards carry Bleed, and after alexanbv posted the current Flametrooper
+ * card, ALL 15 are correctly classified. 10 as a surge, 5 as an innate.
+ *
+ * I initially reported [Flame Trooper] as wrong on six points. Every one was
+ * the local art being stale, not the data. That is the second time in a day,
+ * and the tell is volume: a cluster of independent mismatches on ONE card means
+ * stale art, where a single isolated mismatch usually means a real defect.
  *
  * Three of the surge cards carry Bleed inside a COMBO surge rather than alone.
  * That matters because a combo splitter that dropped the second half would be
@@ -37,7 +40,7 @@ const SURGE_BLEED = [
   'Ugnaught Tinkerer (Elite)', 'Ugnaught Tinkerer (Regular)',
   'Vinto Hreeda', 'Wookiee Warrior (Elite)', 'Wookiee Warrior (Regular)',
 ];
-const INNATE_BLEED = ['Gaarkhan', 'Krrsantan', 'Nexu (Elite)', 'Nexu (Regular)'];
+const INNATE_BLEED = ['Gaarkhan', 'Krrsantan', 'Nexu (Elite)', 'Nexu (Regular)', '[Flame Trooper]'];
 
 describe('surge Bleed', () => {
   for (const n of SURGE_BLEED) {
@@ -62,8 +65,7 @@ describe('no card has it both ways', () => {
     const all = Object.entries(dc)
       .filter(([, v]) => v && typeof v === 'object' && (hasBleed(v.surgeAbilities) || hasBleed([...(v.abilities || []), ...(v.passives || [])])))
       .map(([k]) => k).sort();
-    // [Flame Trooper] is the known-wrong one, raised with alexanbv.
-    const expected = [...SURGE_BLEED, ...INNATE_BLEED, '[Flame Trooper]'].sort();
+    const expected = [...SURGE_BLEED, ...INNATE_BLEED].sort();
     assert.deepEqual(all, expected, 'a new Bleed card appeared — classify it against its art');
   });
 
@@ -100,22 +102,42 @@ describe('the three COMBO surges keep both halves', () => {
   });
 });
 
-describe('KNOWN WRONG: [Flame Trooper], raised with alexanbv 2026-09-02', () => {
-  // Its innate band prints "Priority Target" and "+2 Acc., Weaken". Pinned as
-  // CURRENT, not correct, so the fix is a visible edit rather than silent drift.
-  test('it currently carries a phantom innate Bleed and Pierce 1, and no Weaken', () => {
-    const inn = dc['[Flame Trooper]'].abilities;
-    assert.deepEqual(inn, ['Bleed', '+2 Accuracy', 'Pierce 1'],
-      'if this fails the card was corrected — update the docstring and the lists above');
-    assert.ok(!inn.includes('Weaken'), 'Weaken is printed on the card and missing here');
+describe('[Flame Trooper] — our data was RIGHT; the local art was stale', () => {
+  // I reported six defects on this card. alexanbv posted the current IACP
+  // Approved version and every one of them was the stale art, not the data:
+  //
+  //   innate band  Priority Target | Bleed | +2 Acc., Pierce 1   <- matches ours
+  //   surges       +2 Damage | Blast 1                            <- matches
+  //   Health 8, Speed 4, black, red+green                         <- matches
+  //   Incinerate places a RUBBLE token                            <- matches
+  //   Fireproof has no Napalm sentence                            <- matches
+  //
+  // The module image we hold (images/DC Skirmish Upgrades/Flametrooper.png,
+  // "IACP Season 6") shows Weaken instead of Bleed+Pierce, health 9, and a
+  // Napalm token. alexanbv: "There is no such thing as napalm."
+  //
+  // So the Bleed audit is 15 of 15 correct, not 14. The only real defects were
+  // two typos in Fireproof, fixed.
+  test('Bleed IS an innate here, as the current card prints it', () => {
+    assert.deepEqual(dc['[Flame Trooper]'].abilities, ['Bleed', '+2 Accuracy', 'Pierce 1']);
+    assert.deepEqual(dc['[Flame Trooper]'].passives, ['Priority Target']);
+    assert.ok(!hasBleed(dc['[Flame Trooper]'].surgeAbilities));
   });
 
-  test('and Incinerate places a Rubble token where the card says Napalm', () => {
+  test('health 8 and the printed surges', () => {
+    assert.equal(dc['[Flame Trooper]'].health, 8);
+    assert.deepEqual(dc['[Flame Trooper]'].surgeAbilities, ['damage 2', 'blast 1']);
+  });
+
+  test('Incinerate places a RUBBLE token — Napalm does not exist', () => {
     assert.match(dc['[Flame Trooper]'].abilityText, /place a Rubble token in the target space/);
     const bridge = readFileSync(resolve(root, 'src/engine/combat-bridge.js'), 'utf8');
     assert.match(bridge, /game\.rubbleTokens\.push\(_ftCoord\)/);
-    // A napalm token type already exists in the renderer, unused by this path.
-    const tokens = JSON.parse(readFileSync(resolve(root, 'data/token-images.json'), 'utf8'));
-    assert.ok(JSON.stringify(tokens).includes('napalm'), 'the token art exists');
+    assert.ok(!/Napalm/i.test(dc['[Flame Trooper]'].abilityText));
+  });
+
+  test('Fireproof reads as printed, with the two typos fixed', () => {
+    assert.match(dc['[Flame Trooper]'].abilityText,
+      /Fireproof: You cannot suffer Strain\. You are unaffected by your own Blast and abilities with "Flamethrower" in their name\./);
   });
 });
