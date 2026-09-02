@@ -1595,7 +1595,7 @@
         "FORCE USER",
         "TECHNICIAN"
       ],
-      "subname": "JEDI SCAVENGER",
+      "subname": "JEDI SURVIVOR",
       "cost": 8,
       "health": 14,
       "speed": 5,
@@ -1641,12 +1641,13 @@
       },
       "attachment": false,
       "companion": true,
+      "campaignOnly": true,
       "surgeAbilities": [
         "agitate"
       ],
       "abilities": [
         "+2 Accuracy",
-        "+1 Evade"
+        "+1 Dodge"
       ]
     },
     "Captain Terro": {
@@ -1670,7 +1671,7 @@
         "type": "range"
       },
       "defense": [
-        "white"
+        "black"
       ],
       "surgeAbilities": [
         "damage 2",
@@ -1700,8 +1701,7 @@
       "keywords": [
         "TROOPER",
         "BRAWLER",
-        "HEAVY WEAPON",
-        "PROFESSIONAL"
+        "HEAVY WEAPON"
       ],
       "subname": "DROPPER VETERAN",
       "cost": 9,
@@ -1733,7 +1733,8 @@
         "hunker_down"
       ],
       "abilities": [
-        "+1 Accuracy"
+        "+1 Accuracy",
+        "Professional"
       ]
     },
     "Cassian Andor": {
@@ -5065,6 +5066,7 @@
       ],
       "attachment": false,
       "companion": true,
+      "campaignOnly": true,
       "affiliation": "Any"
     },
     "Probe Droid (Elite)": {
