@@ -7250,7 +7250,7 @@
           "red",
           "green"
         ],
-        "type": "melee"
+        "type": "range"
       },
       "defense": [
         "black"
