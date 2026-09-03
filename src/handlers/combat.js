@@ -27,11 +27,6 @@ import { hasAgileAbility, applyAgileConversion } from '../game/agile-jet-trooper
 import { hasAimAbility, aimBonusApplies, applyAimBonus } from '../game/aim-rebel-trooper-helpers.js';
 import { hasTakeCoverAbility, applyTakeCoverBonus } from '../game/take-cover-jawa-helpers.js';
 import { hasSlipperyAbility, applySlipperyBonus } from '../game/slippery-smuggler-helpers.js';
-import {
-  hasDeadPreciseAbility,
-  deadPreciseBonusApplies,
-  applyDeadPreciseBonus,
-} from '../game/dead-precise-kotun-helpers.js';
 import { hasAwkwardAbility, awkwardBlocks } from '../game/awkward-atst-helpers.js';
 import {
   hasSniperAbility,
@@ -70,10 +65,6 @@ import {
 } from '../game/charge-generators-helpers.js';
 import { hasSprayFireAbility, applySprayFire } from '../game/spray-fire-helpers.js';
 import { hasRaiderAbility, buildRaiderForcedReroll } from '../game/raider-weequay-helpers.js';
-import {
-  hasSquadTrainingAbility,
-  applySquadTrainingReroll,
-} from '../game/squad-training-helpers.js';
 import { hasQueryAbility, applyQueryBonus } from '../game/query-hk47-helpers.js';
 import {
   hasBespinSecurityAbility,
