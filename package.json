@@ -30,7 +30,8 @@
     "smoke:startup": "node scripts/smoke-startup.js",
     "smoke:imports": "node scripts/smoke-imports.js",
     "smoke:context": "node scripts/smoke-context.js",
-    "predeploy": "npm run smoke:imports && npm run smoke:context && npm run smoke:startup && npm run test:headless",
+    "smoke:committed": "node scripts/smoke-committed.js",
+    "predeploy": "npm run smoke:imports && npm run smoke:context && npm run smoke:startup && npm run smoke:committed && npm run test:headless",
     "dashboard": "node scripts/generate-crr-dashboard.js"
   },
   "type": "module",
