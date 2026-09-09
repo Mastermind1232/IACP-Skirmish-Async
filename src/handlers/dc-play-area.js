@@ -2285,8 +2285,26 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
   const _curActFigKey = figureKeyForActivation(game, msgId);
   const hasFellSwoopFreeAttack = action === 'Attack' && !!game.fellSwoopFreeAttack?.[_curActFigKey];
   const hasPummelFreeAttack = action === 'Attack' && !!(game.pummelTwoAttacksThisActivation?.[_curActFigKey]);
+  // GRANTED free attacks, the general case. alexanbv 2026-09-09, on BT-1's
+  // Missile Salvo: "Missile salvo is one action and the whole of the one action
+  // is performing 3 attacks."
+  //
+  // freeAttackBonusPending is THE mechanism for "this attack costs no action" —
+  // Missile Salvo, Heroic, Order Hit, Vader's Finest, Autofire, Fire Mission,
+  // Darksaber Strike, Orbital Bombardment and Rapid Fire all set it. It was
+  // honoured at the CHARGING site below (isHeroicAttack, ~line 2776) but not
+  // here at the GATE, so a figure that had spent both actions was refused
+  // before it ever reached the charge. Fell Swoop and Pummel had each been
+  // given their own exemption; every other grant was still broken, which is
+  // why this is the flag and not a fourth special case.
+  //
+  // Matches the charging site's `!= null` test so the flag's three shapes
+  // (true, a count, or {from}) all read the same way.
+  const hasGrantedFreeAttack = action === 'Attack' && game.freeAttackBonusPending?.[_curActFigKey] != null;
+  const hasPounceFreeAttack = action === 'Attack' && game.pounceAttackPending?.[_curActFigKey] != null;
   const isMpBasedSpecial = buttonKey === 'dc_special_' && _effectiveActionCost === 0;
-  if (actionsRemaining <= 0 && action !== 'SpendMp' && !hasFellSwoopFreeAttack && !hasPummelFreeAttack && !isMpBasedSpecial) {
+  if (actionsRemaining <= 0 && action !== 'SpendMp' && !hasFellSwoopFreeAttack && !hasPummelFreeAttack
+      && !hasGrantedFreeAttack && !hasPounceFreeAttack && !isMpBasedSpecial) {
     await interaction.followUp({ content: 'No actions remaining this activation (2 per DC).', ephemeral: true }).catch(discordCatch);
     return;
   }
