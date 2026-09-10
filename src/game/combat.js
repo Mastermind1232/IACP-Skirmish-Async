@@ -641,12 +641,20 @@ export function computeCombatResult(combat) {
   // the finishCombatResolution message that arrives after all post-attack effects.
   let calcNote = '';
   if (hit) {
+    // alexanbv 2026-09-10: "math to check range and damage minus blocks should
+    // be shown in the suffer damage step to show how much damage figure takes."
+    // The range check used to ride the FINAL result message, which arrives after
+    // every post-attack effect has resolved — too late to read alongside the
+    // damage it justifies. Both halves of the maths now travel together.
+    const _rangeNote = (combat.isRanged && combat.distanceToTarget != null)
+      ? `🎯 **Range:** ${totalAccuracy} accuracy vs ${combat.distanceToTarget} distance\n`
+      : '';
     const _totalDmgResults = (roll.dmg || 0) + (surgeD || 0) + (bonusHits || 0) + (perDefDieDamage || 0);
     const _blkAdj = [];
     if (pierceToUse > 0) _blkAdj.push(`−${pierceToUse} Pierce`);
     if (surgeCancel > 0) _blkAdj.push(`−${surgeCancel} Cancel`);
     const _blkNote = _blkAdj.length ? ` (${blockForCalc} block ${_blkAdj.join(' ')})` : '';
-    calcNote = `🧮 **Damage:** ${_totalDmgResults} damage − ${effectiveBlock} block${_blkNote}`;
+    calcNote = `${_rangeNote}🧮 **Damage:** ${_totalDmgResults} damage − ${effectiveBlock} block${_blkNote}`;
     if (defenderDamageReduction > 0) calcNote += ` − ${defenderDamageReduction} reduction`;
     calcNote += ` = **${damage}**`;
   }

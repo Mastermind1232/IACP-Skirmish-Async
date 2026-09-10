@@ -6,6 +6,7 @@ import { applyStrain, triggerBleedAfterAction } from './strain-handler.js';
 import { openCcCounterWindow } from './cc-pipeline.js';
 import { runCcPlayTriggers } from './cc-hand.js';
 import { postMoveXPicker, clearPendingMoveX } from './move-x-handler.js';
+import { midSpecialAction } from '../game/mid-special-action.js';
 import { areConditionEffectsSuppressed } from '../game/conditions.js';
 import { parseCustomId, splitCustomId } from '../discord/custom-id.js';
 import { fetchGameChannel, sanitizeMentions } from '../discord/channel-helpers.js';
@@ -2357,6 +2358,28 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
 
   if (action === 'Move' || action === 'SpendMp') {
     const isSpendMp = action === 'SpendMp';
+    // alexanbv 2026-09-10: "Spending banked Mp should not be permitted between
+    // steps of any special action (for example, the three attacks of missile
+    // salvo). MP gained as part of the special action must be spent
+    // immediately. Banked mp are available once the special action fully
+    // resolves."
+    //
+    // Only BANKED spending is blocked — MP granted BY the special action still
+    // flows through its own immediate path, and the bank reopens the moment the
+    // special finishes. The predicate lives in one module so this does not
+    // become another list that drifts (see mid-special-action.js).
+    if (isSpendMp) {
+      const _msaDg = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
+      const _msaFk = `${meta.dcName}-${_msaDg}-${figureIndex}`;
+      const _msaName = midSpecialAction(game, msgId, _msaFk);
+      if (_msaName) {
+        await interaction.followUp({
+          content: `**${_msaName}** is still resolving — banked movement points cannot be spent between its steps. Finish it first.`,
+          ephemeral: true,
+        }).catch(discordCatch);
+        return;
+      }
+    }
     // G36: Parting Blow / Parting Shot — reset once-per-move flag at the start of each new Move action
     if (!isSpendMp && game.partingShotTriggered) game.partingShotTriggered = {};
     // Stale Parting Blow stash is for a prior move's exit window — clear it so a
