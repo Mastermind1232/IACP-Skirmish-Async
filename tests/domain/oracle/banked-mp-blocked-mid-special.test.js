@@ -79,12 +79,23 @@ describe('the gate is wired into the SpendMp path only', () => {
     assert.match(src, /const _msaName = midSpecialAction\(game, msgId, _msaFk\);/);
   });
 
-  test('it fires for SpendMp and NOT for Move', () => {
-    // Move during a special is a separate question and was not ruled on.
+  test('it fires for BOTH SpendMp and the Move action', () => {
+    // alexanbv 2026-09-10: "if by 'move' you mean take a move action while
+    // resolving another action... you can't do that either. That would be
+    // trying to do 2 actions at once."
     const branch = src.slice(src.indexOf("const isSpendMp = action === 'SpendMp';"));
     const guard = branch.slice(0, branch.indexOf('partingShotTriggered'));
-    assert.match(guard, /if \(isSpendMp\) \{/);
     assert.match(guard, /banked movement points cannot be spent between its steps/);
+    assert.match(guard, /cannot take a Move action in the middle of another action/);
+    assert.ok(!/if \(isSpendMp\) \{/.test(guard), 'the gate is no longer SpendMp-only');
+  });
+
+  test('movement that BELONGS to the special is untouched', () => {
+    // "But of course the figure can move spaces if it is part of the special."
+    // Move-X pickers, pushes and in-special repositioning do not route through
+    // handleDcAction's Move branch, so the gate cannot reach them.
+    assert.ok(!/midSpecialAction/.test(readFileSync(resolve(root, 'src/handlers/move-x-handler.js'), 'utf8')),
+      'the Move-X picker must not consult the gate');
   });
 
   test('the refusal names the special that is blocking', () => {
@@ -101,5 +112,39 @@ describe('the gate is wired into the SpendMp path only', () => {
     assert.ok(!/pendingMissileSalvo|focusFireActive|multiFireActive|saberOrbitAttacksRemaining/.test(guard),
       'the gate must not name individual special-action states');
     assert.match(guard, /midSpecialAction\(/);
+  });
+});
+
+describe('THE GENERAL CASE: an outstanding granted attack counts as mid-action', () => {
+  // alexanbv 2026-09-10: "there are many more two attack abilities. For
+  // example, vinto, ig11, tonfa. As well as abilities that allow you to attack
+  // without spending an action."
+  //
+  // Enumerating them was the wrong shape. freeAttackBonus is the shared
+  // mechanism (abilities.js:3095 — "Heroic, Rapid Fire, Brutality, etc.") and
+  // its pending flag is set for exactly as long as the figure still owes an
+  // attack. That makes it the general predicate.
+  test('any figure owing a granted attack is mid-action', () => {
+    assert.equal(midSpecialAction({ freeAttackBonusPending: { 'Vinto Hreeda-1-0': true } }, 'm', 'Vinto Hreeda-1-0'),
+      'a granted attack');
+  });
+
+  test('a COUNT grant (Rapid Fire, Sarlacc Sweep) counts while any remain', () => {
+    assert.equal(midSpecialAction({ freeAttackBonusPending: { 'IG-11-1-0': 2 } }, 'm', 'IG-11-1-0'), 'a granted attack');
+  });
+
+  test('and it clears as soon as nothing is owed', () => {
+    assert.equal(midSpecialAction({ freeAttackBonusPending: {} }, 'm', 'X-1-0'), null);
+  });
+
+  test('Pounce rides the same principle under its own flag', () => {
+    assert.equal(midSpecialAction({ pounceAttackPending: { 'Nexu (Elite)-1-0': true } }, 'm', 'Nexu (Elite)-1-0'), 'Pounce');
+  });
+
+  test('the flag is the one ~65 grant sites already set, so nothing needs listing', () => {
+    const abilities = readFileSync(resolve(root, 'src/game/abilities.js'), 'utf8');
+    assert.match(abilities, /freeAttackBonus \(Heroic, Rapid Fire, Brutality, etc\.\)/,
+      'the generic grant branch');
+    assert.match(abilities, /game\.freeAttackBonusPending\[_fabFk\] = entry\.freeAttackBonusCount \?\? true;/);
   });
 });

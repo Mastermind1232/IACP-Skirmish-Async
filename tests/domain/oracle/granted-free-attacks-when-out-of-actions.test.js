@@ -93,3 +93,36 @@ describe('Missile Salvo sets the flag the gate now honours', () => {
     assert.equal(lib.missile_salvo.oncePer, 'activation', 'one use per activation, not one action per attack');
   });
 });
+
+describe('the grant is CONSUMED when the attack commits', () => {
+  // Exempting the gate without consuming the flag would be worse than the
+  // original bug: freeAttackBonusPending lives for the whole activation
+  // (ACTIVATION_FIGKEY_FLAGS), so one grant would buy unlimited attacks at
+  // zero actions. handleAttackTarget is where the attack actually commits and
+  // is therefore where the flag must be spent.
+  const combatSrc = readFileSync(resolve(root, 'src/handlers/combat.js'), 'utf8');
+
+  test('handleAttackTarget now recognises the general flag at all', () => {
+    // It previously referenced freeAttackBonusPending ZERO times, so every
+    // granted free attack fell through to `consumeActionForCurrentFigure`.
+    assert.match(combatSrc, /const isGrantedFreeAttack = game\.freeAttackBonusPending\?\.\[_attackerFkEarly\] != null;/);
+  });
+
+  test('a count grant decrements and a single-use grant clears', () => {
+    assert.match(combatSrc, /const _fab = game\.freeAttackBonusPending\[_attackerFkEarly\];/);
+    assert.match(combatSrc, /if \(typeof _fab === 'number' && _fab > 1\) \{[\s\S]{0,120}_fab - 1;/);
+    assert.match(combatSrc, /delete game\.freeAttackBonusPending\[_attackerFkEarly\];/);
+  });
+
+  test('it short-circuits BEFORE the else that charges an action', () => {
+    const chain = combatSrc.slice(combatSrc.indexOf('const isGrantedFreeAttack'));
+    const upToCharge = chain.slice(0, chain.indexOf('consumeActionForCurrentFigure'));
+    assert.match(upToCharge, /} else if \(isGrantedFreeAttack\) \{/);
+    assert.ok(upToCharge.includes('isBLFreeAttack'), 'the per-ability markers still follow it');
+  });
+
+  test('the flag survives a whole activation, which is why consuming it matters', () => {
+    const st = readFileSync(resolve(root, 'src/game/activation-state.js'), 'utf8');
+    assert.match(st, /'freeAttackBonusPending'/, 'cleared only at activation end');
+  });
+});

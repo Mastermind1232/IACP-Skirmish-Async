@@ -3496,7 +3496,34 @@ export async function handleAttackTarget(interaction, ctx) {
     const isBombardmentFreeAttack = game.pendingBombardmentSorin?.forMsgId === msgId;
     const isFiringSquadFreeAttack = (game.pendingFiringSquad || []).some(p => p.forMsgId === msgId);
     const isCoordinatedRaidFreeAttack = game.pendingCoordinatedRaid?.forMsgId === msgId;
-    if (isBLFreeAttack) {
+    // GRANTED free attacks, the general flag. `freeAttackBonusPending` is what
+    // ~65 sites set to mean "this attack costs no action" — Missile Salvo,
+    // Heroic, Order Hit, Vader's Finest, Autofire, Fire Mission, Darksaber
+    // Strike, Orbital Bombardment, Rapid Fire and more. It was checked NOWHERE
+    // in this file, so every one of them fell to the `else` below and paid an
+    // action anyway.
+    //
+    // The seven markers above are per-ability special cases, each added when
+    // that ability was reported broken. This is the flag they should all have
+    // used, and consuming it HERE (where the attack actually commits) is what
+    // makes it one attack per grant — the block in dc-play-area that used to
+    // consume it sits after every action branch has returned, so it is
+    // unreachable for an Attack and the flag was never being cleared at all.
+    // alexanbv 2026-09-09 (BT-1 Missile Salvo).
+    const isGrantedFreeAttack = game.freeAttackBonusPending?.[_attackerFkEarly] != null;
+    const isPounceFreeAttack = game.pounceAttackPending?.[_attackerFkEarly] != null;
+    if (isPounceFreeAttack) {
+      delete game.pounceAttackPending[_attackerFkEarly];
+    } else if (isGrantedFreeAttack) {
+      // A count grant (Rapid Fire's 2, Brutality's 2) decrements; anything else
+      // is single-use and clears. Mirrors the shape dc-play-area used.
+      const _fab = game.freeAttackBonusPending[_attackerFkEarly];
+      if (typeof _fab === 'number' && _fab > 1) {
+        game.freeAttackBonusPending[_attackerFkEarly] = _fab - 1;
+      } else {
+        delete game.freeAttackBonusPending[_attackerFkEarly];
+      }
+    } else if (isBLFreeAttack) {
       clearPendingBattlefieldLeadership(game);
     } else if (isFellSwoopFreeAttack) {
       delete game.fellSwoopFreeAttack[_attackerFkEarly];

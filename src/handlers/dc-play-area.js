@@ -2368,13 +2368,24 @@ export async function handleDcAction(interaction, ctx, buttonKey) {
     // flows through its own immediate path, and the bank reopens the moment the
     // special finishes. The predicate lives in one module so this does not
     // become another list that drifts (see mid-special-action.js).
-    if (isSpendMp) {
+    {
       const _msaDg = (meta.displayName || '').match(/\[(?:DG|Group) (\d+)\]/)?.[1] ?? 1;
       const _msaFk = `${meta.dcName}-${_msaDg}-${figureIndex}`;
       const _msaName = midSpecialAction(game, msgId, _msaFk);
       if (_msaName) {
+        // alexanbv 2026-09-10 on the Move half: "if by 'move' you mean take a
+        // move action while resolving another action... you can't do that
+        // either. That would be trying to do 2 actions at once. But of course
+        // the figure can move spaces if it is part of the special."
+        //
+        // This gate is the MOVE ACTION button and the BANKED-MP button only.
+        // Movement that belongs to the special — a Move-X picker, a push, the
+        // reposition inside Pounce or Rush — never comes through here, so it is
+        // unaffected.
         await interaction.followUp({
-          content: `**${_msaName}** is still resolving — banked movement points cannot be spent between its steps. Finish it first.`,
+          content: isSpendMp
+            ? `**${_msaName}** is still resolving — banked movement points cannot be spent between its steps. Finish it first.`
+            : `**${_msaName}** is still resolving — you cannot take a Move action in the middle of another action. Finish it first.`,
           ephemeral: true,
         }).catch(discordCatch);
         return;

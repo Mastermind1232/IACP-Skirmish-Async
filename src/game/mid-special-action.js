@@ -32,6 +32,24 @@ export function midSpecialAction(game, msgId, figureKey) {
 
   if (!figureKey) return null;
 
+  // THE GENERAL CASE. alexanbv 2026-09-10: "there are many more two attack
+  // abilities. For example, vinto, ig11, tonfa. As well as abilities that allow
+  // you to attack without spending an action."
+  //
+  // He is right that enumerating them was the wrong shape. `freeAttackBonus` is
+  // the shared mechanism behind all of them — abilities.js:3095 calls it
+  // "Heroic, Rapid Fire, Brutality, etc." — and it leaves
+  // freeAttackBonusPending[figureKey] set for exactly as long as the figure
+  // still owes an attack. An outstanding granted attack IS an action still
+  // resolving, so taking a Move or spending banked MP first would be the two-
+  // actions-at-once he ruled out.
+  //
+  // This covers Vinto's Rapid Fire, IG-11, Brutality, Sarlacc Sweep and every
+  // future ability that grants an attack, without anyone having to remember to
+  // add it to a list.
+  if (game.freeAttackBonusPending?.[figureKey] != null) return 'a granted attack';
+  if (game.pounceAttackPending?.[figureKey] != null) return 'Pounce';
+
   // The "perform N attacks" specials, each keyed per figure.
   const counted = [
     ['focusFireActive', 'Focus Fire'],
@@ -57,6 +75,8 @@ export function midSpecialAction(game, msgId, figureKey) {
 /** Every state key this module treats as "a special action is mid-resolution". */
 export const MID_SPECIAL_ACTION_KEYS = Object.freeze([
   'pendingMissileSalvo',
+  'freeAttackBonusPending',
+  'pounceAttackPending',
   'focusFireActive',
   'multiFireActive',
   'overheatedActive',
